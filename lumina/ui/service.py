@@ -15,7 +15,7 @@ from typing import Any
 
 from ..core import calculations as calc
 from ..core import database as db
-from ..advisor import intelligence as advisor
+from ..advisor import service as advisor
 from ..core import engine
 from ..constants import SAMUEL, SARA
 
