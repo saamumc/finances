@@ -4,12 +4,12 @@ import tempfile
 import unittest
 from pathlib import Path
 
-import database as db
-import calculations as calc
+from lumina.core import database as db
+from lumina.core import calculations as calc
 import financial_advisor
 import financial_engine
 from frontend.service import FinanceService
-from constants import InsufficientFundsError, ValidationError
+from lumina.constants import InsufficientFundsError, ValidationError
 
 
 class FinanceDomainTests(unittest.TestCase):
