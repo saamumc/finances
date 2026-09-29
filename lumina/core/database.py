@@ -13,8 +13,8 @@ from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 
 from ..constants import (
     DuplicateOperationError, ESTADO_ACTIVO, ESTADO_REVERSADO, IntegrityError,
-    InsufficientFundsError, METODO_TARJETA, PERSONA1, PRIORIDAD_OBLIGATORIO,
-    MOV_AHORRO_DEPOSITO, MOV_AHORRO_RETIRO, PERSONA2, RESP_COMPARTIDO, RESP_P1, RESP_P2, TipoCuentaTercero, ValidationError, validar_fecha,
+    InsufficientFundsError, METODO_TARJETA, SAMUEL, PRIORIDAD_OBLIGATORIO,
+    MOV_AHORRO_DEPOSITO, MOV_AHORRO_RETIRO, SARA, RESP_COMPARTIDO, RESP_P1, RESP_P2, TipoCuentaTercero, ValidationError, validar_fecha,
     validar_mes, validar_metodo_pago, validar_monto_no_negativo, validar_monto_positivo, validar_persona,
     validar_prioridad, validar_responsabilidad, validar_movimiento_ahorro, validar_texto, validar_tipo_cuenta_tercero,
 )
@@ -773,7 +773,7 @@ def ajustar_saldo_tarjeta(tarjeta_id: int, nuevo_saldo: object, motivo: str, fec
         pendiente = 0
         if variacion > 0:
             pendiente = variacion
-            if tarjeta["propietario"] == PERSONA1:
+            if tarjeta["propietario"] == SAMUEL:
                 p1 = variacion
             else:
                 p2 = variacion
@@ -781,7 +781,7 @@ def ajustar_saldo_tarjeta(tarjeta_id: int, nuevo_saldo: object, motivo: str, fec
             por_corregir = -variacion
             historico = min(por_corregir, tarjeta["saldo_historico_pendiente"])
             if historico:
-                if tarjeta["propietario"] == PERSONA1:
+                if tarjeta["propietario"] == SAMUEL:
                     p1 += historico
                 else:
                     p2 += historico
@@ -1002,7 +1002,7 @@ def crear_ahorro(nombre: str, propietario: str, descripcion: str | None = None, 
     titular = titular or propietario
     if titular != RESP_COMPARTIDO:
         validar_persona(titular)
-    validar_persona(propietario if propietario != RESP_COMPARTIDO else PERSONA1)
+    validar_persona(propietario if propietario != RESP_COMPARTIDO else SAMUEL)
     descripcion_limpia = validar_texto(descripcion or "", "La descripción", maximo=500, obligatorio=False) or None
     meta = validar_monto_no_negativo(meta)
     prioridad = validar_prioridad(prioridad)
@@ -1043,7 +1043,7 @@ def _saldo_ahorro(conn: sqlite3.Connection, ahorro_id: int) -> int:
 
 
 def registrar_movimiento_ahorro(mes: str, fecha: str, ahorro_id: int, tipo: str, monto: object,
-                                concepto: str, transaction_uuid: str | None = None, *, aportante: str = PERSONA1,
+                                concepto: str, transaction_uuid: str | None = None, *, aportante: str = SAMUEL,
                                 gasto_id: int | None = None, motivo: str | None = None) -> int:
     """Registra un depósito o retiro interno sin convertirlo en ingreso/gasto."""
     mes = validar_mes(mes)
@@ -1623,13 +1623,13 @@ def proponer_anular_movimiento(tipo: str, movimiento_id: int) -> dict:
     if existing is not None:
         warnings.append("Ya existe una operación inversa vinculada a este movimiento.")
     delta_income = delta_outflow = delta_liquidity = delta_savings = 0
-    balances_after = {persona: balance[f"balance_neto_{persona}"] for persona in (PERSONA1, PERSONA2)}
+    balances_after = {persona: balance[f"balance_neto_{persona}"] for persona in (SAMUEL, SARA)}
     if normalized == "ingreso":
         delta_income, delta_liquidity = -amount, -amount
     elif normalized == "gasto":
         delta_outflow, delta_liquidity = -amount, amount
-        for persona in (PERSONA1, PERSONA2):
-            balances_after[persona] += int(item[f"monto_{'p1' if persona == PERSONA1 else 'p2'}"]) - (amount if item["pagador"] == persona else 0)
+        for persona in (SAMUEL, SARA):
+            balances_after[persona] += int(item[f"monto_{'p1' if persona == SAMUEL else 'p2'}"]) - (amount if item["pagador"] == persona else 0)
     elif normalized == "liquidacion":
         balances_after[item["deudor"]] -= amount
         balances_after[item["acreedor"]] += amount
@@ -1648,15 +1648,15 @@ def proponer_anular_movimiento(tipo: str, movimiento_id: int) -> dict:
         "flujo": int(flow["ahorro"]) + delta_income - delta_outflow,
         "liquidez": liquidity + delta_liquidity,
         "ahorro": calc.resumen_ahorros()["total"] + delta_savings,
-        "saldo_samuel": balances_after[PERSONA1],
-        "saldo_sara": balances_after[PERSONA2],
+        "saldo_samuel": balances_after[SAMUEL],
+        "saldo_sara": balances_after[SARA],
     }
     return {
         "modifica_base": False, "tipo_original": normalized, "movimiento_id": movimiento_id,
         "descripcion": item.get(description_field) or normalized.title(), "monto": amount,
         "situacion_actual": {"ingresos": flow["ingresos"], "salidas": flow["salidas"], "flujo": flow["ahorro"],
                               "liquidez": liquidity, "ahorro": calc.resumen_ahorros()["total"],
-                              "saldo_samuel": balance[f"balance_neto_{PERSONA1}"], "saldo_sara": balance[f"balance_neto_{PERSONA2}"]},
+                              "saldo_samuel": balance[f"balance_neto_{SAMUEL}"], "saldo_sara": balance[f"balance_neto_{SARA}"]},
         "despues_de_anular": after, "se_puede_anular": can_reverse and not warnings,
         "advertencias": warnings,
         "nota": "Vista previa calculada desde movimientos activos. No se modificó SQLite; la confirmación crea el asiento inverso auditable.",
@@ -1691,8 +1691,8 @@ def revisar_transaccion(tarjeta_id: int, movimiento_id: int, tipo: str = "movimi
         deuda_responsable = calc.deuda_pendiente_por_responsabilidad(tarjeta_id)
         actual = {
             "saldo_tarjeta": tarjeta["saldo_deuda"], "utilizacion": tarjeta["saldo_deuda"] / tarjeta["cupo_total"] if tarjeta["cupo_total"] else 0.0,
-            "responsabilidad_samuel": deuda_responsable[PERSONA1], "responsabilidad_sara": deuda_responsable[PERSONA2],
-            "saldo_samuel": balance[f"balance_neto_{PERSONA1}"], "saldo_sara": balance[f"balance_neto_{PERSONA2}"],
+            "responsabilidad_samuel": deuda_responsable[SAMUEL], "responsabilidad_sara": deuda_responsable[SARA],
+            "saldo_samuel": balance[f"balance_neto_{SAMUEL}"], "saldo_sara": balance[f"balance_neto_{SARA}"],
         }
         if tipo == "gasto":
             movimiento = conn.execute("SELECT * FROM compras_tarjeta WHERE gasto_id=?", (movimiento_id,)).fetchone()
@@ -1720,7 +1720,7 @@ def revisar_transaccion(tarjeta_id: int, movimiento_id: int, tipo: str = "movimi
             deuda_p1 = deuda_p2 = 0
             historico = int(movimiento["monto_historico_aplicado"])
             if historico:
-                if tarjeta["propietario"] == PERSONA1: deuda_p1 += historico
+                if tarjeta["propietario"] == SAMUEL: deuda_p1 += historico
                 else: deuda_p2 += historico
             for asignacion in asignaciones:
                 p1, p2 = _distribuir_proporcional(int(asignacion["monto_asignado"]), int(asignacion["valor_original"]), int(asignacion["monto_p1"]))
@@ -1740,10 +1740,10 @@ def revisar_transaccion(tarjeta_id: int, movimiento_id: int, tipo: str = "movimi
             despues = {
                 "saldo_tarjeta": tarjeta["saldo_deuda"] + monto if puede else None,
                 "utilizacion": (tarjeta["saldo_deuda"] + monto) / tarjeta["cupo_total"] if puede and tarjeta["cupo_total"] else None,
-                "responsabilidad_samuel": deuda_responsable[PERSONA1] + deuda_p1 if puede else None,
-                "responsabilidad_sara": deuda_responsable[PERSONA2] + deuda_p2 if puede else None,
-                "saldo_samuel": balance[f"balance_neto_{PERSONA1}"] - movimiento["monto_aportado_p1"] + deuda_p1 if puede else None,
-                "saldo_sara": balance[f"balance_neto_{PERSONA2}"] - movimiento["monto_aportado_p2"] + deuda_p2 if puede else None,
+                "responsabilidad_samuel": deuda_responsable[SAMUEL] + deuda_p1 if puede else None,
+                "responsabilidad_sara": deuda_responsable[SARA] + deuda_p2 if puede else None,
+                "saldo_samuel": balance[f"balance_neto_{SAMUEL}"] - movimiento["monto_aportado_p1"] + deuda_p1 if puede else None,
+                "saldo_sara": balance[f"balance_neto_{SARA}"] - movimiento["monto_aportado_p2"] + deuda_p2 if puede else None,
             }
             descripcion = movimiento["concepto"] or "Pago de tarjeta"
         else:
@@ -1757,11 +1757,11 @@ def revisar_transaccion(tarjeta_id: int, movimiento_id: int, tipo: str = "movimi
             despues = {
                 "saldo_tarjeta": tarjeta["saldo_deuda"] - monto if puede else None,
                 "utilizacion": (tarjeta["saldo_deuda"] - monto) / tarjeta["cupo_total"] if puede and tarjeta["cupo_total"] else None,
-                "responsabilidad_samuel": deuda_responsable[PERSONA1] - movimiento["monto_p1"] if puede else None,
-                "responsabilidad_sara": deuda_responsable[PERSONA2] - movimiento["monto_p2"] if puede else None,
+                "responsabilidad_samuel": deuda_responsable[SAMUEL] - movimiento["monto_p1"] if puede else None,
+                "responsabilidad_sara": deuda_responsable[SARA] - movimiento["monto_p2"] if puede else None,
                 # Una compra sin pagos no deja saldo entre personas: retirar consumo y deuda pendiente se compensa.
-                "saldo_samuel": balance[f"balance_neto_{PERSONA1}"] if puede else None,
-                "saldo_sara": balance[f"balance_neto_{PERSONA2}"] if puede else None,
+                "saldo_samuel": balance[f"balance_neto_{SAMUEL}"] if puede else None,
+                "saldo_sara": balance[f"balance_neto_{SARA}"] if puede else None,
             }
             descripcion = movimiento["descripcion"]
         ya_reversada = conn.execute("SELECT id FROM reversiones_tarjeta WHERE tipo_original=? AND original_id=?",
@@ -1812,8 +1812,8 @@ def get_ahorros(solo_activos: bool = True) -> list[dict]:
                 FROM ahorros a LEFT JOIN movimientos_ahorro m ON m.ahorro_id=a.id AND m.estado=?
                 {filtro} GROUP BY a.id ORDER BY a.nombre COLLATE NOCASE"""
     with get_conn() as conn:
-        params = (MOV_AHORRO_DEPOSITO, MOV_AHORRO_RETIRO, MOV_AHORRO_DEPOSITO, PERSONA1,
-                  MOV_AHORRO_DEPOSITO, PERSONA2, MOV_AHORRO_DEPOSITO, MOV_AHORRO_RETIRO, ESTADO_ACTIVO)
+        params = (MOV_AHORRO_DEPOSITO, MOV_AHORRO_RETIRO, MOV_AHORRO_DEPOSITO, SAMUEL,
+                  MOV_AHORRO_DEPOSITO, SARA, MOV_AHORRO_DEPOSITO, MOV_AHORRO_RETIRO, ESTADO_ACTIVO)
         return [dict(row) for row in conn.execute(query, params)]
 
 
