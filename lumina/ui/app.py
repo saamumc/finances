@@ -52,6 +52,7 @@ class FinanzasApp(ctk.CTk):
             ("Gastos fijos","▤",self.show_fixed_expenses),
             ("Cajitas","◇",self.show_savings),
             ("Tarjetas","▣",self.show_cards),
+            ("Plan financiero","◈",self.show_financial_os),
             ("Deudas","⊘",self.show_debts),
             ("Asesor","✦",self.show_advisor),
             ("Análisis","▦",self.show_analytics),
@@ -1855,6 +1856,40 @@ class FinanzasApp(ctk.CTk):
                 signo="+" if linea["efecto"]>=0 else "−"
                 ctk.CTkLabel(razones,text=f"{signo}{dinero(abs(linea['efecto']))} · {linea['detalle']}",text_color=T.TXT,wraplength=850,justify="left").pack(anchor="w",padx=26,pady=2)
         ctk.CTkFrame(razones,height=10,fg_color="transparent").pack()
+
+    def show_financial_os(self)->None:
+        self._clear("Plan financiero","Plan financiero")
+        self._heading("Plan financiero","Una sola foto para avanzar desde las deudas hasta la construcción de patrimonio.")
+        estado=self.service.financial_os(self.selected_month)
+        resumen=estado["resumen"]
+        self._card(2,0,"Dinero libre",dinero(resumen["dinero_libre"]),"Margen registrado para decidir",T.OK,2)
+        self._card(2,2,"Deuda total",dinero(resumen["deuda_total"]),"Tarjetas + otras deudas",T.WARN,2)
+        self._card(3,0,"Fondo de emergencia",f'{resumen["emergencia_cobertura"]:.1f} meses',"Cobertura registrada",T.SAVE,2)
+        self._card(3,2,"Inversión actual",dinero(resumen["inversion_actual"]),"Valor derivado de movimientos",T.PRIMARY,2)
+        caja=self._panel(4,0,4)
+        ctk.CTkLabel(caja,text="ORDEN FINANCIERO",font=ui.fuente(11,"bold"),text_color=T.MUTED).pack(anchor="w",padx=18,pady=(16,8))
+        for item in estado["prioridades"]:
+            fila=ui.fila(caja); fila.pack(fill="x",padx=18,pady=5)
+            ui.insignia(fila,str(item["orden"]),tono="suave").pack(side="left",padx=(0,10))
+            ctk.CTkLabel(fila,text=item["titulo"],font=ui.fuente(13,"bold"),text_color=T.TXT).pack(side="left")
+            ctk.CTkLabel(fila,text=item["detalle"],text_color=T.MUTED,wraplength=600,justify="left").pack(side="left",padx=12)
+        deuda=self._panel(5,0,4)
+        ctk.CTkLabel(deuda,text="SALIDA DE DEUDAS",font=ui.fuente(11,"bold"),text_color=T.MUTED).pack(anchor="w",padx=18,pady=(16,5))
+        p=estado["plan_deuda"]["avalancha"]; s=estado["plan_deuda"]["bola_de_nieve"]
+        ctk.CTkLabel(deuda,text=f'Presupuesto mensual: {dinero(estado["plan_deuda"]["presupuesto_mensual"])}',text_color=T.TXT).pack(anchor="w",padx=18)
+        ctk.CTkLabel(deuda,text=f'Avalancha: {p["months"]} meses · interés proyectado {dinero(p["total_interest"])}' if p["months"] else p["note"],text_color=T.TXT).pack(anchor="w",padx=18,pady=5)
+        ctk.CTkLabel(deuda,text=f'Bola de nieve: {s["months"]} meses · interés proyectado {dinero(s["total_interest"])}' if s["months"] else s["note"],text_color=T.MUTED).pack(anchor="w",padx=18,pady=(0,14))
+        emerg=self._panel(6,0,2)
+        ctk.CTkLabel(emerg,text="FONDO DE EMERGENCIA",font=ui.fuente(11,"bold"),text_color=T.MUTED).pack(anchor="w",padx=18,pady=(16,5))
+        e=estado["emergencia"]
+        ctk.CTkLabel(emerg,text=f'Actual: {dinero(e["actual"])} · {e["cobertura_meses"]:.1f} meses',font=Tipo.seccion(),text_color=T.SAVE).pack(anchor="w",padx=18,pady=5)
+        ctk.CTkLabel(emerg,text=f'Meta base: {dinero(e["objetivos"]["base"])} · faltan {dinero(e["faltante_base"])}',text_color=T.TXT).pack(anchor="w",padx=18,pady=(0,16))
+        inv=self._panel(6,2,2)
+        ctk.CTkLabel(inv,text="INVERSIONES",font=ui.fuente(11,"bold"),text_color=T.MUTED).pack(anchor="w",padx=18,pady=(16,5))
+        iv=estado["inversiones"]
+        ctk.CTkLabel(inv,text=dinero(iv["total"]),font=Tipo.numero(),text_color=T.PRIMARY).pack(anchor="w",padx=18,pady=5)
+        ctk.CTkLabel(inv,text=f'{iv["cantidad"]} inversión(es) · aportes {dinero(iv["aportes"])} · variación registrada {dinero(iv["valoraciones"])}',text_color=T.TXT,wraplength=390,justify="left").pack(anchor="w",padx=18,pady=(0,16))
+
     def show_settings(self)->None:
         """Preferencias locales. Aquí no se modifica ningún dato financiero."""
         self._clear("Ajustes","Ajustes")
