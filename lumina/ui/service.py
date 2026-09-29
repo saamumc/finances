@@ -485,6 +485,42 @@ class FinanceService:
         advisor.invalidar_contexto(mes)
 
     # ------------------------------------------------------------------
+    # Financial OS: deuda -> emergencia -> ahorro -> inversión -> patrimonio
+    # ------------------------------------------------------------------
+    def financial_os(self, mes: str, presupuesto_deuda: Any = None) -> dict[str, Any]:
+        from ..core import financial_plan
+        presupuesto = None if presupuesto_deuda in (None, "") else parsear_dinero(presupuesto_deuda)
+        return financial_plan.financial_os(mes, presupuesto)
+
+    def resumen_inversiones(self) -> dict[str, Any]:
+        from ..core import financial_plan
+        return financial_plan.resumen_inversiones()
+
+    def crear_inversion(self, datos: dict[str, Any]) -> int:
+        from ..core import financial_plan
+        return financial_plan.crear_inversion(**datos)
+
+    def registrar_movimiento_inversion(self, inversion_id: int, tipo: str, monto: Any, fecha: str | None = None) -> int:
+        from ..core import financial_plan
+        return financial_plan.registrar_movimiento_inversion(int(inversion_id), tipo, parsear_dinero(monto), fecha)
+
+    def desactivar_inversion(self, inversion_id: int) -> None:
+        from ..core import financial_plan
+        financial_plan.desactivar_inversion(int(inversion_id))
+
+    def plan_deuda(self, mensual_disponible: Any) -> dict[str, Any]:
+        from ..core import financial_plan
+        return financial_plan.plan_deuda(parsear_dinero(mensual_disponible))
+
+    def fondo_emergencia(self, mes: str) -> dict[str, Any]:
+        from ..core import financial_plan
+        return financial_plan.fondo_emergencia(mes)
+
+    def proyeccion_inversion(self, aporte_mensual: Any, meses: int, tasa_anual_pb: int) -> dict[str, Any]:
+        from ..core import financial_plan
+        return financial_plan.proyeccion_inversion(parsear_dinero(aporte_mensual), int(meses), int(tasa_anual_pb))
+
+    # ------------------------------------------------------------------
     # Gastos fijos
     # ------------------------------------------------------------------
     def gastos_fijos(self, mes: str | None = None) -> dict[str, Any]:
