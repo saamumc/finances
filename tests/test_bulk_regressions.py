@@ -7,6 +7,7 @@ import unittest
 from pathlib import Path
 
 from lumina.advisor import intelligence as iq
+from lumina.core import calculations as calc
 from lumina.core import database as db
 from lumina.core import engine
 from lumina.ui.service import FinanceService
@@ -30,7 +31,7 @@ class BulkRegressionsTests(unittest.TestCase):
         self.assertEqual(service.estado_actual(mes), engine.financial_state(mes))
         self.assertEqual(
             service.estado_actual(mes)["liquidity"]["by_person"],
-            db and __import__("lumina.core.calculations", fromlist=["liquidez_por_persona"]).liquidez_por_persona(mes),
+            calc.liquidez_por_persona(mes),
         )
 
     def test_diferir_tarjeta_tiene_ruta_propia_y_no_recomienda_un_pago(self):
