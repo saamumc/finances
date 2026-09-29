@@ -4,11 +4,11 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from lumina.core from lumina.core import database as db
-from lumina.core from lumina.core import calculations as calc
-import financial_advisor
-import financial_engine
-from frontend.service import FinanceService
+from lumina.core import database as db
+from lumina.core import calculations as calc
+from lumina.advisor import service as financial_advisor
+from lumina.core import engine as financial_engine
+from lumina.ui.service import FinanceService
 from lumina.constants import InsufficientFundsError, ValidationError
 
 
