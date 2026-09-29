@@ -15,7 +15,7 @@ from typing import Any
 
 from ..core import calculations as calc
 from ..core import database as db
-from ..advisor import service as advisor
+from ..advisor import intelligence as advisor
 from ..core import engine
 from ..constants import SAMUEL, SARA
 
@@ -542,7 +542,8 @@ class FinanceService:
     # Balance de pareja
     # ------------------------------------------------------------------
     def estado_actual(self, mes: str) -> dict[str, Any]:
-        return {"liquidity": {"by_person": calc.liquidez_por_persona(mes)}}
+        """Devuelve la foto financiera canónica del motor, sin perder el contrato de UI."""
+        return engine.financial_state(mes)
 
     def explicacion(self, persona: str) -> dict[str, Any]:
         return calc.explicar_balance(persona)
