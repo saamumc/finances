@@ -11,13 +11,13 @@ except ModuleNotFoundError as exc:
 import logging
 import traceback
 from tkinter import messagebox
-from constants import PERSONA1, PERSONA2
+from ..constants import PERSONA1, PERSONA2
 try:  # El proyecto admite service.py en la raíz o dentro del paquete frontend/.
     from .service import FinanceService, NOMBRES, cargar_preferencias, dinero, guardar_preferencias, mes_actual, parsear_dinero
 except ModuleNotFoundError:
     from .service import FinanceService, NOMBRES, cargar_preferencias, dinero, guardar_preferencias, mes_actual, parsear_dinero
-import ui_kit as ui
-from ui_kit import Espacio, Tipo
+from ... import ui_kit as ui
+from ...ui_kit import Espacio, Tipo
 
 LOG = logging.getLogger("lumina.ui")
 
