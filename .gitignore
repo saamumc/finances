@@ -1,0 +1,31 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Entornos
+.venv/
+venv/
+env/
+
+# Datos locales y backups financieros
+data/*.db
+data/*.db-*
+data/*.backup*.db
+*.db
+*.sqlite
+*.sqlite3
+
+# Backups temporales del código
+.repair-backup-*/
+
+# IDE / sistema
+.vscode/
+.idea/
+*.code-workspace
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Logs
+*.log

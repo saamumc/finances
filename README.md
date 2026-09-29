@@ -11,13 +11,14 @@ comando `py` si está disponible y tiene una alternativa para la instalación
 local de Python de este equipo.
 
 También puedes ejecutarla desde una terminal con Python configurado, dentro de
-esta carpeta:
+esta carpeta. Primero instala las dependencias:
 
 ```bash
+python -m pip install -r requirements.txt
 python main.py
 ```
 
-No requiere `pip install`: utiliza Tkinter y SQLite incluidos con Python.
+Requiere Python 3.12+ y la dependencia `customtkinter`. SQLite y Tkinter forman parte de las instalaciones habituales de Python.
 
 ## Arquitectura
 

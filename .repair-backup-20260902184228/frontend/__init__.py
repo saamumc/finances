@@ -1,1 +1,0 @@
-"""Interfaz local de Finanzas."""

@@ -22,7 +22,7 @@ import advisor_intelligence as iq
 import database as db
 import financial_advisor as advisor
 import financial_engine as engine
-from service import FinanceService
+from frontend.service import FinanceService
 
 MES = sys.argv[1] if len(sys.argv) > 1 else "2026-09"
 OK: list[str] = []
