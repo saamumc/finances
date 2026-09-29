@@ -4,7 +4,7 @@ No comprueba imports: ejecuta cada capacidad contra la base y valida
 condiciones concretas. Cada caso imprime lo que obtuvo para poder revisarlo.
 
 Uso:
-    python -m tests.test_advisor.py            # usa data/finances.db
+    python -m tests.test_advisor            # usa data/finances.db
     python test_advisor.py 2026-09    # fija el mes de análisis
 """
 from __future__ import annotations
