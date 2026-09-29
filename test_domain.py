@@ -217,24 +217,24 @@ class FinanceDomainTests(unittest.TestCase):
         self.assertFalse(escenario["modifica_base"]); self.assertEqual(db.get_tarjetas()[0]["saldo_deuda"], antes)
         self.assertEqual(proyeccion["saldo"], antes)
 
-    def test_gasto_con_tarjeta_editable_despues_de_pago_sin_romper_deuda(self) -> None:
-        """Una corrección conserva los abonos FIFO y actualiza la deuda pendiente."""
+    def test_gasto_con_tarjeta_responsabilidad_congelada_despues_de_pago(self) -> None:
+        """Los metadatos cambian; importe y distribución no se reasignan tras un pago."""
         tarjeta = db.registrar_tarjeta("Samuel", "persona1", 2_000_000)
         gasto = db.registrar_gasto("2026-09", "Viaje", "Ocio", 800_000, "2026-09-02", "tarjeta",
                                    "persona1", "compartido", 200_000, 600_000, tarjeta)
         db.registrar_pago_tarjeta("2026-09", "2026-09-03", tarjeta, 300_000, "persona1", 300_000, 0)
-        db.actualizar_gasto(gasto, "2026-09", "Viaje corregido", "Vacaciones", 900_000,
-                            "2026-09-04", "persona2", "compartido", 270_000, 630_000)
+        db.actualizar_gasto(gasto, "2026-09", "Viaje corregido", "Vacaciones", 800_000,
+                            "2026-09-04", "persona2", "compartido", 200_000, 600_000)
         compra = db.get_compras_tarjeta(tarjeta)[0]
         actualizado = db.get_gasto(gasto)
         self.assertEqual((compra["valor_original"], compra["valor_pendiente"], db.get_tarjetas()[0]["saldo_deuda"]),
-                         (900_000, 600_000, 600_000))
+                         (800_000, 500_000, 500_000))
         self.assertEqual((actualizado["nombre"], actualizado["categoria"], actualizado["pagador"],
                           actualizado["monto_p1"], actualizado["monto_p2"]),
-                         ("Viaje corregido", "Vacaciones", "persona2", 270_000, 630_000))
+                         ("Viaje corregido", "Vacaciones", "persona2", 200_000, 600_000))
         with self.assertRaises(ValidationError):
-            db.actualizar_gasto(gasto, "2026-09", "Inválido", "Vacaciones", 299_999,
-                                "2026-09-04", "persona2", "persona2", 0, 299_999)
+            db.actualizar_gasto(gasto, "2026-09", "Inválido", "Vacaciones", 900_000,
+                                "2026-09-04", "persona2", "compartido", 270_000, 630_000)
 
     def test_liquidez_usa_responsabilidad_y_separa_la_caja_real(self) -> None:
         """Caso obligatorio: Samuel paga pero solo asume el 25% de la compra."""
