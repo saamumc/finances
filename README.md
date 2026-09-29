@@ -1,8 +1,7 @@
 # Finanzas de Samuel & Sara
 
 Aplicación local de escritorio para registrar ingresos, gastos, tarjetas,
-pagos de tarjeta y liquidaciones entre pareja. Los datos viven únicamente en
-`data/finances.db` (SQLite).
+pagos de tarjeta y liquidaciones entre pareja. Los datos viven únicamente en la base SQLite local `data/finances.db`, que no se versiona en Git.
 
 ## Ejecutar
 
@@ -22,17 +21,22 @@ Requiere Python 3.12+ y la dependencia `customtkinter`. SQLite y Tkinter forman 
 
 ## Arquitectura
 
+La aplicación está organizada en un único paquete compacto, `lumina/`, dividido por responsabilidad:
+
 ```text
-constants.py        Valores de dominio y validaciones
-database.py         Persistencia, migraciones, reversas e invariantes de escritura
-calculations.py     Liquidez, flujo de caja, deuda y balance; solo lectura
-financial_engine.py Estado financiero, reglas, diagnóstico, proyecciones y auditoría; solo lectura
-financial_advisor.py Adaptación del motor a planes, alertas y recomendaciones para la interfaz
-frontend/service.py Adaptador de UI: presenta datos y llama al backend
-app.py              Vistas, diálogos, tema y actualización visual
-test_domain.py      Pruebas de regresión del dominio
-main.py             Punto de entrada
+lumina/
+├── core/       Reglas financieras, SQLite, cálculos y motor de estado
+├── advisor/    Contexto, hallazgos, inteligencia y servicio del asesor
+├── ui/         Interfaz CustomTkinter, componentes visuales y servicio de UI
+└── constants.py Dominio compartido, enums y validaciones
+
+tests/          Pruebas de dominio, invariantes, asesor y UI
+main.py         Punto de entrada
 ```
+
+La carpeta `lumina/core` es autocontenida para trabajar sobre la lógica financiera; `lumina/advisor` contiene todo el asesor; y `lumina/ui` contiene todo lo necesario para la interfaz. Esto permite entregar una carpeta completa a otra IA sin repartir la lógica por toda la raíz del proyecto.
+
+La aplicación actualmente modela únicamente a **Samuel y Sara**. Los valores históricos `persona1` y `persona2` se conservan internamente porque forman parte del esquema SQLite existente; no se está haciendo una migración de datos solo por cambiar nombres.
 
 La interfaz nunca calcula deuda, liquidez o balances por su cuenta: los obtiene
 de `calculations.py`. Cada creación y reversa se delega a `database.py`; los
