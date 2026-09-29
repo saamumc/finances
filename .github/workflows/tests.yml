@@ -22,4 +22,4 @@ jobs:
       - name: Install dependencies
         run: python -m pip install -r requirements.txt
       - name: Run domain tests
-        run: python -m unittest -q test_domain.py test_invariants.py
+        run: python -m pytest -q tests/test_domain.py tests/test_invariants.py
