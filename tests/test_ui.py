@@ -17,11 +17,7 @@ import traceback
 from pathlib import Path
 from typing import Any, Callable
 
-sys.path.insert(0, str(Path(__file__).parent))
-try:
-    from tests.support from tests.support import ctk_stub  # noqa: E402  (debe instalarse antes de importar app)
-except ModuleNotFoundError:
-    import ctk_stub  # type: ignore[no-redef]  # noqa: E402
+from tests.support import ctk_stub  # noqa: E402  (debe instalarse antes de importar app)
 
 MESSAGEBOX = ctk_stub.instalar()
 
