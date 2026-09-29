@@ -11,7 +11,7 @@ except ModuleNotFoundError as exc:
 import logging
 import traceback
 from tkinter import messagebox
-from ..constants import PERSONA1, PERSONA2
+from ..constants import SAMUEL, SARA
 try:  # El proyecto admite service.py en la raíz o dentro del paquete frontend/.
     from .service import FinanceService, NOMBRES, cargar_preferencias, dinero, guardar_preferencias, mes_actual, parsear_dinero
 except ModuleNotFoundError:
@@ -76,8 +76,8 @@ class FinanzasApp(ctk.CTk):
         perfiles.pack(side="left",pady=12)
         self.profile_buttons={}
         for nombre,accion in (
-            ("Sara",lambda:self.show_personal_dashboard(PERSONA2)),
-            ("Samuel",lambda:self.show_personal_dashboard(PERSONA1)),
+            ("Sara",lambda:self.show_personal_dashboard(SARA)),
+            ("Samuel",lambda:self.show_personal_dashboard(SAMUEL)),
             ("Nosotros",self.show_dashboard),
         ):
             boton=ctk.CTkButton(perfiles,text=nombre,width=88 if nombre!="Nosotros" else 104,height=36,
@@ -385,7 +385,7 @@ class FinanzasApp(ctk.CTk):
         ui.titulo_seccion(col_a,"Cómo va cada uno","Aportes de caja del mes. La responsabilidad económica se lee aparte.").pack(anchor="w",pady=(Espacio.XL,Espacio.SM))
         liquidez=perfil["flujo"]["por_persona"]
         maximo=max(1,*[max(x["liquidez"],0) for x in liquidez.values()])
-        for persona,nombre,color in ((PERSONA1,"Samuel",T.PRIMARY),(PERSONA2,"Sara",T.TERRA)):
+        for persona,nombre,color in ((SAMUEL,"Samuel",T.PRIMARY),(SARA,"Sara",T.TERRA)):
             linea=ui.fila(col_a); linea.pack(fill="x",pady=8)
             ctk.CTkLabel(linea,text=nombre,width=64,anchor="w",font=ui.fuente(13,"bold")).pack(side="left")
             ctk.CTkLabel(linea,text=dinero(liquidez[persona]["liquidez"]),font=Tipo.ayuda(),text_color=T.MUTED).pack(side="right")
@@ -712,7 +712,7 @@ class FinanzasApp(ctk.CTk):
         ctk.CTkLabel(estado,text="RESPONSABILIDAD ECONÓMICA PENDIENTE",text_color=T.MUTED,font=ui.fuente(10,"bold")).pack(anchor="w",padx=13,pady=(10,2))
         ctk.CTkLabel(estado,text=f"Samuel debe {dinero(tarjeta['deuda_persona1'])}  ·  Sara debe {dinero(tarjeta['deuda_persona2'])}",font=ui.fuente(15,"bold")).pack(anchor="w",padx=13)
         ctk.CTkLabel(estado,text="Esto viene de las compras y no cambia por quién haga la transferencia.",text_color=T.MUTED,wraplength=455,justify="left").pack(anchor="w",padx=13,pady=(2,10))
-        date=self._entry(body,"Fecha",dt.date.today().isoformat());total=self._entry(body,"Monto total del pago COP");payer=self._entry(body,"Quién hizo la transferencia","Samuel" if tarjeta["propietario"]==PERSONA1 else "Sara",["Samuel","Sara"])
+        date=self._entry(body,"Fecha",dt.date.today().isoformat());total=self._entry(body,"Monto total del pago COP");payer=self._entry(body,"Quién hizo la transferencia","Samuel" if tarjeta["propietario"]==SAMUEL else "Sara",["Samuel","Sara"])
         reparto=self._entry(body,"Cómo se cubrió este pago","Lo pagó quien hizo la transferencia",["Lo pagó quien hizo la transferencia","50/50 entre Samuel y Sara","Según lo que cada quien debe","Monto personalizado"])
         p1=self._entry(body,"Samuel puso COP","0");p2=self._entry(body,"Sara puso COP","0");preview=ctk.CTkLabel(body,text="Escribe el total para calcular los aportes.",text_color=T.MUTED,wraplength=460,justify="left");preview.pack(anchor="w",padx=18,pady=(8,2));concept=self._entry(body,"Motivo (opcional)")
         def poner(campo:Any,valor:int)->None:
@@ -929,7 +929,7 @@ class FinanzasApp(ctk.CTk):
         meta=self._entry(contenedor,"Meta COP (opcional)","0")
         titular=self._entry(contenedor,"Titular","Compartido",["Samuel","Sara","Compartido"])
         def crear()->None:
-            dueno=PERSONA1 if self._value(titular)=="Samuel" else PERSONA2 if self._value(titular)=="Sara" else "compartido"
+            dueno=SAMUEL if self._value(titular)=="Samuel" else SARA if self._value(titular)=="Sara" else "compartido"
             self.service.crear_cajita({"nombre":self._value(nombre),"meta":self._value(meta),"titular":dueno,
                                        "descripcion":"","icono":"◈"})
             d.destroy(); self.show_savings()
@@ -937,7 +937,7 @@ class FinanzasApp(ctk.CTk):
 
     def savings_movement_dialog(self,b:dict[str,Any])->None:
         d=ctk.CTkToplevel(self,fg_color=T.BG);d.title(f"{b['nombre']} · Movimiento");d.geometry("420x410");d.grab_set();body=ctk.CTkFrame(d,fg_color=T.S,corner_radius=Espacio.RADIO);body.pack(fill="both",expand=True,padx=14,pady=14); kind=self._entry(body,"Movimiento","Ingresar dinero",["Ingresar dinero","Retirar dinero"]); amount=self._entry(body,"Monto COP");concept=self._entry(body,"Motivo");person=self._entry(body,"Quién lo realiza","Samuel",["Samuel","Sara"])
-        def save()->None:self.service.movimiento_ahorro({"mes":self.selected_month,"fecha":dt.date.today().isoformat(),"ahorro_id":str(b["id"]),"tipo":"Depositar" if self._value(kind).startswith("Ingresar") else "Retirar","monto":self._value(amount),"concepto":self._value(concept),"aportante":PERSONA1 if self._value(person)=="Samuel" else PERSONA2});d.destroy();self.show_savings()
+        def save()->None:self.service.movimiento_ahorro({"mes":self.selected_month,"fecha":dt.date.today().isoformat(),"ahorro_id":str(b["id"]),"tipo":"Depositar" if self._value(kind).startswith("Ingresar") else "Retirar","monto":self._value(amount),"concepto":self._value(concept),"aportante":SAMUEL if self._value(person)=="Samuel" else SARA});d.destroy();self.show_savings()
         ctk.CTkButton(body,text="Guardar movimiento",fg_color=T.PRIMARY,command=lambda:self._run(save,"Movimiento registrado")).pack(fill="x",pady=20)
 
     def show_fixed_expenses(self)->None:
@@ -1805,7 +1805,7 @@ class FinanzasApp(ctk.CTk):
         monto=self._entry(body,"Monto inicial COP"); propietario=self._entry(body,"¿De quién es esta cuenta?","Samuel",["Samuel","Sara"]); concepto=self._entry(body,"Concepto","Préstamo / saldo inicial")
         def save()->None:
             seleccionado=next(x for x in terceros if str(x["id"])==self._value(tercero).split(" · ",1)[0])
-            self.service.crear_prestamo_tercero({"mes":self.selected_month,"fecha":dt.date.today().isoformat(),"tercero":seleccionado["nombre"],"tipo":"POR_PAGAR" if self._value(situacion)=="Le debemos" else "POR_COBRAR","monto":self._value(monto),"propietario":PERSONA1 if self._value(propietario)=="Samuel" else PERSONA2,"concepto":self._value(concepto)})
+            self.service.crear_prestamo_tercero({"mes":self.selected_month,"fecha":dt.date.today().isoformat(),"tercero":seleccionado["nombre"],"tipo":"POR_PAGAR" if self._value(situacion)=="Le debemos" else "POR_COBRAR","monto":self._value(monto),"propietario":SAMUEL if self._value(propietario)=="Samuel" else SARA,"concepto":self._value(concepto)})
             dialog.destroy(); self.show_third_parties()
         ctk.CTkButton(body,text="Guardar cuenta pendiente",fg_color=T.PRIMARY,command=lambda:self._run(save,"Cuenta pendiente registrada")).pack(fill="x",padx=20,pady=20)
 
@@ -1825,14 +1825,14 @@ class FinanzasApp(ctk.CTk):
             dialog.destroy(); self.show_third_parties()
         ctk.CTkButton(body,text="Guardar abono",fg_color=T.PRIMARY,command=lambda:self._run(save,"Abono registrado")).pack(fill="x",padx=20,pady=20)
     def show_settlement(self)->None:
-        self._clear("Liquidación","Liquidación");self._heading("Balance de pareja","El saldo entre ustedes usa todo el historial activo. Los ingresos actualizan la liquidez, no crean por sí solos una deuda entre ustedes.");estado=self.service.estado_actual(self.selected_month); explicaciones={persona:self.service.explicacion(persona) for persona in (PERSONA1,PERSONA2)}
-        samuel,sara=explicaciones[PERSONA1]["balance_neto"],explicaciones[PERSONA2]["balance_neto"]
-        for i,(p,label) in enumerate(((PERSONA1,"Samuel"),(PERSONA2,"Sara"))):v=explicaciones[p]["balance_neto"];self._card(2,i*2,label,dinero(abs(v)),("A favor" if v>0 else "Pendiente de equilibrar" if v<0 else "Equilibrado")+f" · Liquidez del mes: {dinero(estado['liquidity']['by_person'][p]['liquidez'])}",T.OK if v>=0 else T.WARN,2)
+        self._clear("Liquidación","Liquidación");self._heading("Balance de pareja","El saldo entre ustedes usa todo el historial activo. Los ingresos actualizan la liquidez, no crean por sí solos una deuda entre ustedes.");estado=self.service.estado_actual(self.selected_month); explicaciones={persona:self.service.explicacion(persona) for persona in (SAMUEL,SARA)}
+        samuel,sara=explicaciones[SAMUEL]["balance_neto"],explicaciones[SARA]["balance_neto"]
+        for i,(p,label) in enumerate(((SAMUEL,"Samuel"),(SARA,"Sara"))):v=explicaciones[p]["balance_neto"];self._card(2,i*2,label,dinero(abs(v)),("A favor" if v>0 else "Pendiente de equilibrar" if v<0 else "Equilibrado")+f" · Liquidez del mes: {dinero(estado['liquidity']['by_person'][p]['liquidez'])}",T.OK if v>=0 else T.WARN,2)
         liquidacion:tuple[str,str,int]|None=None
         if samuel>0 and sara<0:
-            monto_equilibrio=min(samuel,abs(sara));resumen=f"Sara debería pagarle a Samuel {dinero(monto_equilibrio)} para equilibrar los movimientos registrados.";liquidacion=(PERSONA2,PERSONA1,monto_equilibrio)
+            monto_equilibrio=min(samuel,abs(sara));resumen=f"Sara debería pagarle a Samuel {dinero(monto_equilibrio)} para equilibrar los movimientos registrados.";liquidacion=(SARA,SAMUEL,monto_equilibrio)
         elif sara>0 and samuel<0:
-            monto_equilibrio=min(sara,abs(samuel));resumen=f"Samuel debería pagarle a Sara {dinero(monto_equilibrio)} para equilibrar los movimientos registrados.";liquidacion=(PERSONA1,PERSONA2,monto_equilibrio)
+            monto_equilibrio=min(sara,abs(samuel));resumen=f"Samuel debería pagarle a Sara {dinero(monto_equilibrio)} para equilibrar los movimientos registrados.";liquidacion=(SAMUEL,SARA,monto_equilibrio)
         else: resumen="No hay un pago pendiente entre Samuel y Sara con los movimientos registrados."
         decision=self._panel(3,0,4);ctk.CTkLabel(decision,text="RESULTADO",text_color=T.MUTED,font=ui.fuente(10,"bold")).pack(anchor="w",padx=18,pady=(15,3));ctk.CTkLabel(decision,text=resumen,font=Tipo.seccion(),text_color=T.OK if liquidacion is None else T.PRIMARY,wraplength=860,justify="left").pack(anchor="w",padx=18,pady=(0,8))
         if liquidacion:
@@ -1847,10 +1847,10 @@ class FinanzasApp(ctk.CTk):
             ctk.CTkButton(decision,text=f"Registrar pago a {nombre_acreedor} · {dinero(monto_equilibrio)}",height=34,fg_color=T.PRIMARY,command=lambda:self._run(registrar_pago_balance,"Pago de balance registrado")).pack(anchor="w",padx=18,pady=(0,15))
         else: ctk.CTkFrame(decision,height=7,fg_color="transparent").pack()
         razones=self._panel(4,0,4);ctk.CTkLabel(razones,text="¿POR QUÉ?",text_color=T.MUTED,font=ui.fuente(10,"bold")).pack(anchor="w",padx=18,pady=(15,5));ctk.CTkLabel(razones,text="Cada línea muestra qué pagó o qué le correspondía a cada persona.",text_color=T.MUTED).pack(anchor="w",padx=18)
-        for persona,label in ((PERSONA1,"Samuel"),(PERSONA2,"Sara")):
+        for persona,label in ((SAMUEL,"Samuel"),(SARA,"Sara")):
             explicacion=explicaciones[persona]["lineas"]
             if not explicacion: continue
-            ctk.CTkLabel(razones,text=label,font=ui.fuente(14,"bold"),text_color=T.PRIMARY if persona==PERSONA1 else T.SAVE).pack(anchor="w",padx=18,pady=(12,2))
+            ctk.CTkLabel(razones,text=label,font=ui.fuente(14,"bold"),text_color=T.PRIMARY if persona==SAMUEL else T.SAVE).pack(anchor="w",padx=18,pady=(12,2))
             for linea in explicacion:
                 signo="+" if linea["efecto"]>=0 else "−"
                 ctk.CTkLabel(razones,text=f"{signo}{dinero(abs(linea['efecto']))} · {linea['detalle']}",text_color=T.TXT,wraplength=850,justify="left").pack(anchor="w",padx=26,pady=2)
