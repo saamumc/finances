@@ -44,7 +44,8 @@ print(f"[database.py] BD será cargada de: {DB_PATH}")
 
 # Cada cambio aditivo de esquema debe aumentar esta versión: así las bases ya
 # existentes ejecutan la migración antes de que la interfaz las consulte.
-SCHEMA_VERSION = 14
+SCHEMA_VERSION = 15
+SCHEMA_VERSION_LEGACY = 14  # último esquema que pasa por _migrar_legacy
 
 
 @contextmanager
@@ -96,9 +97,9 @@ def _crear_esquema_fix(conn: sqlite3.Connection) -> None:
     """
     conn.execute(
         "INSERT OR REPLACE INTO config (key, value) VALUES (?, ?)",
-        ("schema_version", str(SCHEMA_VERSION))
+        ("schema_version", str(SCHEMA_VERSION_LEGACY))
     )
-    print(f"[database.py] Schema version grabada: {SCHEMA_VERSION}")
+    print(f"[database.py] Schema version grabada: {SCHEMA_VERSION_LEGACY}")
 
 
 def _crear_esquema(conn: sqlite3.Connection) -> None:
@@ -379,13 +380,22 @@ def _migrar_legacy(conn: sqlite3.Connection) -> None:
 
 
 def upgrade_db(conn: sqlite3.Connection) -> None:
+    """Migra por escalones. Cada escalón corre solo si la base está por debajo.
+
+    ``_migrar_legacy`` NO es idempotente (p. ej. restablece saldo histórico
+    pendiente), así que jamás se re-ejecuta sobre una base que ya es v14.
+    """
     current = conn.execute("PRAGMA user_version").fetchone()[0]
     if current >= SCHEMA_VERSION:
         return
-    _crear_esquema(conn)
-    _migrar_legacy(conn)
-    _crear_indices(conn)
-    conn.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
+    if current < SCHEMA_VERSION_LEGACY:
+        _crear_esquema(conn)
+        _migrar_legacy(conn)
+        _crear_indices(conn)
+        conn.execute(f"PRAGMA user_version = {SCHEMA_VERSION_LEGACY}")
+    if current < 15:
+        from .migrations_v15 import aplicar_v15
+        aplicar_v15(conn)
 
 
 def init_db() -> None:
@@ -1579,7 +1589,7 @@ def verificar_reversiones_movimientos() -> list[dict]:
 
 def proponer_anular_movimiento(tipo: str, movimiento_id: int) -> dict:
     """Previsualiza una anulación sin escribir SQLite ni delegar en una operación persistente."""
-    import calculations as calc  # Importación tardía: calculations depende de esta capa.
+    from . import calculations as calc  # Importación tardía: calculations depende de esta capa.
 
     normalized = tipo.lower()
     if normalized in {"movimiento_tarjeta", "pago"}:
@@ -1680,7 +1690,7 @@ def revisar_transaccion(tarjeta_id: int, movimiento_id: int, tipo: str = "movimi
     ``gasto`` (id del gasto que originó una compra) y ``pago``. No escribe en
     SQLite; la UI debe usar esta respuesta antes de pedir confirmación.
     """
-    import calculations as calc  # Importación tardía: calculations ya usa database.
+    from . import calculations as calc  # Importación tardía: calculations ya usa database.
 
     tipo = tipo.lower()
     if tipo not in {"movimiento", "compra", "gasto", "pago"}:
@@ -1881,7 +1891,6 @@ def corregir_reversiones_orfanas(conn: sqlite3.Connection) -> int:
 
 def verificar_bd_integridad() -> dict[str, Any]:
     """Auditoría completa de la BD antes de operaciones críticas."""
-    SCHEMA_VERSION = 14
     try:
         with get_conn() as conn:
             cursor = conn.cursor()
@@ -1944,7 +1953,6 @@ def mostrar_advertencias_bd() -> None:
 
 def auto_migrar_si_necesario() -> bool:
     """Si la BD existe pero es vieja, intenta migrar. Retorna True si migró."""
-    SCHEMA_VERSION = 14
     try:
         with get_conn() as conn:
             cursor = conn.cursor()
@@ -1961,19 +1969,22 @@ def auto_migrar_si_necesario() -> bool:
             actual = cursor.fetchone()
             
             if actual is None or actual[0] != str(SCHEMA_VERSION):
-                print(f"[database.py] 📦 Migrando BD a versión {SCHEMA_VERSION}...")
+                print(f"[database.py]   Migrando BD a versión {SCHEMA_VERSION}...")
                 backup_db()
+                upgrade_db(conn)  # migra de verdad; antes solo escribía el número
+                
+                # ACTUALIZAR LA VERSIÓN DEL ESQUEMA AL FINALIZAR
                 conn.execute(
                     "INSERT OR REPLACE INTO config (key, value) VALUES (?, ?)",
                     ("schema_version", str(SCHEMA_VERSION))
                 )
-                print(f"[database.py] ✓ Migración completada")
+                
+                print(f"[database.py]   Migración completada")
                 return True
         return False
     except Exception as e:
-        print(f"[database.py] ⚠️  Error en migración: {e}")
+        print(f"[database.py]    Error en migración: {e}")
         return False
-
 
 if __name__ == "__main__":
     print("Verificando integridad de BD...")

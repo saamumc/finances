@@ -3239,50 +3239,6 @@ def _r_desconocida(mes: str, ctx_dict: dict[str, Any], perfil: dict[str, Any]) -
                       ["¿Me lo puedes decir de otra forma o con un monto concreto?"])
 
 
-_RUTAS: dict[str, Callable[[str, dict[str, Any], dict[str, Any]], dict[str, Any]]] = {
-    "current_state": _r_estado_actual,
-    "affordability": _r_asequibilidad,
-    "purchase_evaluation": _r_compra,
-    "card_payment": _r_pago_tarjeta,
-    "debt_strategy": _r_estrategia_deuda,
-    "savings": _r_ahorro,
-    "fixed_expense": _r_gasto_fijo,
-    "recurring_expense": _r_recurrentes,
-    "spending_analysis": _r_analisis_gastos,
-    "couple_analysis": _r_pareja,
-    "monthly_comparison": _r_comparacion,
-    "anomaly": _r_anomalias,
-    "scenario": _r_escenario,
-    "travel_comparison": _r_viaje,
-    "financial_explanation": _r_explicacion,
-    "data_integrity": _r_integridad,
-    "unknown": _r_desconocida,
-}
-
-INTENCIONES: tuple[str, ...] = tuple(_RUTAS)
-
-
-def responder(mes: str, pregunta: str, *, monto: int | None = None,
-              perfil: dict[str, Any] | None = None) -> dict[str, Any]:
-    """Punto de entrada conversacional: clasifica, enruta y redacta."""
-    mes = validar_mes(mes)
-    contexto = clasificar_intencion(pregunta)
-    if monto is not None:
-        contexto["monto"] = int(monto)
-    perfil = perfil or perfil_financiero(contexto.get("mes") or mes)
-    objetivo = contexto.get("mes") or mes
-    manejador = _RUTAS.get(contexto["intencion"], _r_desconocida)
-    try:
-        resultado = manejador(objetivo, contexto, perfil)
-    except ValueError as error:
-        resultado = _respuesta(contexto["intencion"], f"No puedo responder eso todavía: {error}", {}, "Baja", [])
-    resultado["pregunta"] = pregunta
-    resultado["mes"] = objetivo
-    resultado["contexto"] = {clave: contexto[clave] for clave in ("intencion", "puntaje", "monto", "persona",
-                                                                   "destinos") if clave in contexto}
-    return resultado
-
-
 # ---------------------------------------------------------------------------
 # Cotejo entre gastos fijos registrados y lo que de verdad se está cobrando
 # ---------------------------------------------------------------------------
@@ -3989,11 +3945,28 @@ def _extraer_evidencia(datos: dict[str, Any]) -> list[str]:
     return lineas
 
 
-# Tabla de enrutamiento ampliada. Se conservan los nombres originales de las
-# intenciones y se añaden los nuevos; varios son alias del mismo manejador
-# porque la pregunta cambia de forma pero no de respuesta.
-_RUTAS = {
-    **_RUTAS,
+# Tabla única de enrutamiento intención → manejador. Los nombres originales se
+# conservan y se añaden los nuevos; varios son alias del mismo manejador porque
+# la pregunta cambia de forma pero no de respuesta. ``financial_explanation``
+# usa la versión estructurada en nueve bloques (``_r_explicacion`` quedó sin uso).
+_RUTAS: dict[str, Callable[[str, dict[str, Any], dict[str, Any]], dict[str, Any]]] = {
+    "current_state": _r_estado_actual,
+    "affordability": _r_asequibilidad,
+    "purchase_evaluation": _r_compra,
+    "card_payment": _r_pago_tarjeta,
+    "debt_strategy": _r_estrategia_deuda,
+    "savings": _r_ahorro,
+    "fixed_expense": _r_gasto_fijo,
+    "recurring_expense": _r_recurrentes,
+    "spending_analysis": _r_analisis_gastos,
+    "couple_analysis": _r_pareja,
+    "monthly_comparison": _r_comparacion,
+    "anomaly": _r_anomalias,
+    "scenario": _r_escenario,
+    "travel_comparison": _r_viaje,
+    "financial_explanation": _r_explicacion_estructurada,
+    "data_integrity": _r_integridad,
+    "unknown": _r_desconocida,
     "what_should_we_do": _r_plan,
     "recommendation": _r_plan,
     "why": _r_por_que,
@@ -4026,9 +3999,6 @@ _RUTAS = {
     "explanation": _r_explicacion_estructurada,
     "integrity": _r_integridad,
 }
-
-# La explicación larga pasa a la versión estructurada en nueve bloques.
-_RUTAS["financial_explanation"] = _r_explicacion_estructurada
 
 INTENCIONES = tuple(sorted(_RUTAS))
 

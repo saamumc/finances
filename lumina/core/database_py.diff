@@ -1,0 +1,20 @@
+--- /dev/fd/63	2026-09-29 20:24:23.546800042 +0000
++++ /dev/fd/62	2026-09-29 20:24:23.546800042 +0000
+@@ -1589,7 +1589,7 @@
+ 
+ def proponer_anular_movimiento(tipo: str, movimiento_id: int) -> dict:
+     """Previsualiza una anulación sin escribir SQLite ni delegar en una operación persistente."""
+-    import calculations as calc  # Importación tardía: calculations depende de esta capa.
++    from . import calculations as calc  # Importación tardía: calculations depende de esta capa.
+ 
+     normalized = tipo.lower()
+     if normalized in {"movimiento_tarjeta", "pago"}:
+@@ -1690,7 +1690,7 @@
+     ``gasto`` (id del gasto que originó una compra) y ``pago``. No escribe en
+     SQLite; la UI debe usar esta respuesta antes de pedir confirmación.
+     """
+-    import calculations as calc  # Importación tardía: calculations ya usa database.
++    from . import calculations as calc  # Importación tardía: calculations ya usa database.
+ 
+     tipo = tipo.lower()
+     if tipo not in {"movimiento", "compra", "gasto", "pago"}:
