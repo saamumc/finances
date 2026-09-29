@@ -17,10 +17,10 @@ from ..core import calculations as calc
 from ..core import database as db
 from ..advisor import service as advisor
 from ..core import engine
-from ..constants import PERSONA1, PERSONA2
+from ..constants import SAMUEL, SARA
 
-NOMBRES = {PERSONA1: "Samuel", PERSONA2: "Sara"}
-_PERSONA_POR_NOMBRE = {"Samuel": PERSONA1, "Sara": PERSONA2, PERSONA1: PERSONA1, PERSONA2: PERSONA2}
+NOMBRES = {SAMUEL: "Samuel", SARA: "Sara"}
+_PERSONA_POR_NOMBRE = {"Samuel": SAMUEL, "Sara": SARA, SAMUEL: SAMUEL, SARA: SARA}
 _METODO_POR_ETIQUETA = {"Efectivo": "efectivo", "Débito": "debito", "Tarjeta": "tarjeta",
                         "efectivo": "efectivo", "debito": "debito", "tarjeta": "tarjeta"}
 _PRIORIDAD_POR_ETIQUETA = {"Obligatorio": "obligatorio", "Discrecional": "discrecional",
@@ -91,9 +91,9 @@ def _persona(valor: str) -> str:
 def _responsabilidad(valor: str) -> str:
     texto = str(valor).strip()
     if texto == "Samuel":
-        return PERSONA1
+        return SAMUEL
     if texto == "Sara":
-        return PERSONA2
+        return SARA
     # "Compartido", "Personalizado" y "Porcentaje personalizado" ya se
     # tradujeron a montos p1/p2 concretos en la UI: el modelo de datos solo
     # distingue individual vs. compartido.
@@ -203,7 +203,7 @@ class FinanceService:
         for i in db.get_ingresos(mes, incluir_reversados=incluir_reversados):
             filas.append({"id": i["id"], "tipo": "ingreso", "descripcion": i["concepto"],
                          "persona": NOMBRES[i["persona"]], "fecha": mes, "monto": i["valor"], "estado": i["estado"]})
-        etiqueta_responsabilidad = {PERSONA1: NOMBRES[PERSONA1], PERSONA2: NOMBRES[PERSONA2],
+        etiqueta_responsabilidad = {SAMUEL: NOMBRES[SAMUEL], SARA: NOMBRES[SARA],
                                     "compartido": "Compartido"}
         etiqueta_metodo = {"efectivo": "Efectivo", "debito": "Débito", "tarjeta": "Tarjeta"}
         nombres_tarjeta = {t["id"]: t["nombre"] for t in db.get_tarjetas()}
@@ -224,13 +224,13 @@ class FinanceService:
                          "persona": NOMBRES[p["pagador"]], "fecha": p["fecha"], "monto": p["monto"],
                          "estado": p["estado"], "tarjeta_id": p["tarjeta_id"],
                          "tarjeta": nombres_tarjeta.get(p["tarjeta_id"]),
-                         "responsabilidad": f"Aportes: {NOMBRES[PERSONA1]} {p['monto_aportado_p1']:,} / "
-                                            f"{NOMBRES[PERSONA2]} {p['monto_aportado_p2']:,}".replace(",", "."),
+                         "responsabilidad": f"Aportes: {NOMBRES[SAMUEL]} {p['monto_aportado_p1']:,} / "
+                                            f"{NOMBRES[SARA]} {p['monto_aportado_p2']:,}".replace(",", "."),
                          "categoria": "Pago de tarjeta", "metodo": "Débito"})
         for c in db.get_compras_tarjeta(incluir_reversadas=incluir_reversados):
             if c.get("mes") != mes or c.get("tipo", "COMPRA") == "COMPRA":
                 continue
-            persona = PERSONA1 if c["monto_p1"] >= c["monto_p2"] else PERSONA2
+            persona = SAMUEL if c["monto_p1"] >= c["monto_p2"] else SARA
             filas.append({"id": c["id"], "tipo": "interes" if c["tipo"] == "INTERES" else "cargo",
                          "descripcion": c["descripcion"], "persona": NOMBRES[persona], "fecha": c.get("fecha") or mes,
                          "monto": c["valor_original"], "estado": c["estado"], "tarjeta_id": c["tarjeta_id"]})
@@ -238,9 +238,9 @@ class FinanceService:
             filas.append({"id": l["id"], "tipo": "liquidacion", "descripcion": l.get("concepto") or "Liquidación",
                          "persona": NOMBRES[l["deudor"]], "fecha": l["fecha"], "monto": l["monto"], "estado": l["estado"]})
         for a in db.get_movimientos_ahorro(mes=mes, incluir_reversados=incluir_reversados):
-            aportante = a.get("aportante") or PERSONA1
+            aportante = a.get("aportante") or SAMUEL
             filas.append({"id": a["id"], "tipo": "ahorro", "descripcion": a["concepto"],
-                         "persona": NOMBRES.get(aportante, NOMBRES[PERSONA1]), "fecha": a["fecha"],
+                         "persona": NOMBRES.get(aportante, NOMBRES[SAMUEL]), "fecha": a["fecha"],
                          "monto": a["monto"], "estado": a["estado"]})
         filas.sort(key=lambda fila: (fila["fecha"] or "", fila["id"]), reverse=True)
         return filas
@@ -346,8 +346,8 @@ class FinanceService:
     # Cajitas / metas
     # ------------------------------------------------------------------
     def crear_cajita(self, datos: dict[str, Any]) -> int:
-        titular = datos.get("titular") or PERSONA1
-        propietario = titular if titular in (PERSONA1, PERSONA2) else PERSONA1
+        titular = datos.get("titular") or SAMUEL
+        propietario = titular if titular in (SAMUEL, SARA) else SAMUEL
         return db.crear_ahorro(datos["nombre"], propietario, datos.get("descripcion") or None,
                                parsear_dinero(datos.get("meta", 0)), titular=titular,
                                icono=datos.get("icono") or "💰")
@@ -356,7 +356,7 @@ class FinanceService:
         tipo = "DEPOSITO" if str(datos["tipo"]).strip().lower().startswith("dep") else "RETIRO"
         return db.registrar_movimiento_ahorro(
             datos["mes"], datos["fecha"], int(datos["ahorro_id"]), tipo, parsear_dinero(datos["monto"]),
-            datos.get("concepto") or "Movimiento de cajita", aportante=_persona(datos.get("aportante", PERSONA1)),
+            datos.get("concepto") or "Movimiento de cajita", aportante=_persona(datos.get("aportante", SAMUEL)),
         )
 
     # ------------------------------------------------------------------
