@@ -16,7 +16,7 @@ from typing import Any
 
 from . import calculations as calc
 from . import database as db
-from ..constants import PERSONA1, PERSONA2, PERSONAS_VALIDAS, PRIORIDAD_DISCRECIONAL, validar_mes, validar_persona
+from ..constants import SAMUEL, SARA, PERSONAS_VALIDAS, PRIORIDAD_DISCRECIONAL, validar_mes, validar_persona
 
 
 # Único lugar para modificar los umbrales del asesor. Son referencias de
@@ -307,7 +307,7 @@ def ingresos_historicos(persona: str, meses: int = 12, *, as_of_month: str | Non
     else:
         confidence, reason = "Media", "Hay varios ingresos confirmados, pero existen meses faltantes o variación moderada."
 
-    names = {PERSONA1: "Samuel", PERSONA2: "Sara"}
+    names = {SAMUEL: "Samuel", SARA: "Sara"}
     current = totals.get(reference, 0)
     return {
         "persona": persona,
@@ -346,7 +346,7 @@ def _distribucion_hipotetica(monto: int, responsabilidad: str | None) -> tuple[i
     if responsabilidad is None or responsabilidad == "compartido":
         return monto // 2, monto - monto // 2
     persona = validar_persona(responsabilidad)
-    return (monto, 0) if persona == PERSONA1 else (0, monto)
+    return (monto, 0) if persona == SAMUEL else (0, monto)
 
 
 def _estado_tarjeta_despues_compra(tarjeta: dict[str, Any], monto: int) -> dict[str, Any]:
@@ -423,10 +423,10 @@ def simular_compra(monto: int, mes: str, concepto: str = "compra", *, quien_paga
     flow_after = flow_before + cash_impact
     debt_after = int(state["debt"]["cards_total"]) + (monto if card else 0)
     balance = state["couple_historical"]
-    paid_p1 = monto if not card and payer == PERSONA1 else 0
-    paid_p2 = monto if not card and payer == PERSONA2 else 0
-    balance_p1_after = int(balance[f"balance_neto_{PERSONA1}"]) + paid_p1 - responsibility_p1
-    balance_p2_after = int(balance[f"balance_neto_{PERSONA2}"]) + paid_p2 - responsibility_p2
+    paid_p1 = monto if not card and payer == SAMUEL else 0
+    paid_p2 = monto if not card and payer == SARA else 0
+    balance_p1_after = int(balance[f"balance_neto_{SAMUEL}"]) + paid_p1 - responsibility_p1
+    balance_p2_after = int(balance[f"balance_neto_{SARA}"]) + paid_p2 - responsibility_p2
     if card_impact:
         card_impact["puede_pagar_minimo_registrado"] = int(card_impact["pago_minimo_antes"]) <= max(flow_before, 0)
         card_impact["capacidad_pago_futuro"] = max(flow_before - int(state["flow"]["minimum_card_payments"]), 0)
@@ -469,7 +469,7 @@ def simular_compra(monto: int, mes: str, concepto: str = "compra", *, quien_paga
               "estado_actual": {"caja_disponible": cash_before, "liquidez_economica": economic_before, "ahorro_mensual": flow_before, "deuda_total_tarjetas": state["debt"]["cards_total"], "margen_seguridad": margin},
               "estado_despues": {"caja_disponible": cash_after, "liquidez_economica": economic_before - monto, "caja_suficiente": cash_after >= margin, "ahorro_mensual": flow_after, "deuda_total_tarjetas": debt_after},
               "impacto_tarjeta": card_impact, "alternativas": alternatives, "consecuencias": consequences,
-              "impacto_pareja": {"saldo_samuel_antes": balance[f"balance_neto_{PERSONA1}"], "saldo_sara_antes": balance[f"balance_neto_{PERSONA2}"],
+              "impacto_pareja": {"saldo_samuel_antes": balance[f"balance_neto_{SAMUEL}"], "saldo_sara_antes": balance[f"balance_neto_{SARA}"],
                                   "saldo_samuel_despues": balance_p1_after, "saldo_sara_despues": balance_p2_after,
                                   "pagador": payer, "responsabilidad_samuel": responsibility_p1, "responsabilidad_sara": responsibility_p2}}
     after_db = snapshot_database()
