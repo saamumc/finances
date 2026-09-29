@@ -17,7 +17,7 @@ from ..core import calculations as calc
 from ..core import database as db
 from ..advisor import service as advisor
 from ..core import engine
-from constants import PERSONA1, PERSONA2
+from ..constants import PERSONA1, PERSONA2
 
 NOMBRES = {PERSONA1: "Samuel", PERSONA2: "Sara"}
 _PERSONA_POR_NOMBRE = {"Samuel": PERSONA1, "Sara": PERSONA2, PERSONA1: PERSONA1, PERSONA2: PERSONA2}
