@@ -2682,6 +2682,10 @@ _REGLAS_INTENCION: tuple[tuple[str, tuple[str, ...], tuple[str, ...]], ...] = (
                       "cuanto abonar", "pagar la tarjeta", "abono a la tarjeta", "con que tarjeta",
                       "debito o credito", "como pago esto", "como deberiamos pagar", "como pagamos"),
      ("tarjeta", "tarjetas", "credito", "debito", "abonar", "abono", "pagar", "pago minimo")),
+    ("card_deferral", ("diferir la tarjeta", "diferir alguna tarjeta", "diferir tarjetas",
+                          "diferir una compra", "diferir compras", "diferir una tarjeta y pagar",
+                          "diferir alguna y pagar"),
+     ("diferir", "diferida", "diferidas", "cuotas")),
     ("debt_strategy", ("que deuda", "cual deuda", "que pagar primero", "atacar primero", "avalancha",
                        "bola de nieve", "snowball", "cuando salimos de las tarjetas", "salir de deudas"),
      ("deuda", "deudas", "intereses", "estrategia", "prioridad de pago")),
@@ -2821,6 +2825,26 @@ def _r_compra(mes: str, ctx_dict: dict[str, Any], perfil: dict[str, Any]) -> dic
                       {"asequibilidad": evaluacion, "opciones_pago": pago, "escenario": escenario},
                       evaluacion["confianza"],
                       ["¿La compra es de los dos o de uno solo? Eso cambia cómo se reparte."])
+
+
+def _r_diferir_tarjeta(mes: str, ctx_dict: dict[str, Any], perfil: dict[str, Any]) -> dict[str, Any]:
+    """Aclara un diferimiento sin inventar compra, plazo, tasa ni costo."""
+    texto = (
+        "Sí puedo analizar un diferimiento, pero no voy a asumir que se puede diferir una tarjeta completa. "
+        "Normalmente el diferimiento se aplica a una compra o saldo concreto y depende de las condiciones "
+        "de la entidad. Para decirles qué conviene necesito saber: qué tarjeta, qué compra o saldo quieren "
+        "diferir y a cuántas cuotas. Con esos datos puedo comparar el costo y el efecto sobre los pagos."
+    )
+    return _respuesta(
+        "card_deferral",
+        texto,
+        {
+            "requiere": ["tarjeta", "compra_o_saldo", "numero_cuotas"],
+            "nota": "No se simuló ningún diferimiento porque faltan datos concretos y las condiciones del emisor."
+        },
+        "Baja",
+        ["¿Qué tarjeta y qué compra/saldo quieren diferir?", "¿A cuántas cuotas les ofrecen hacerlo?"],
+    )
 
 
 def _r_pago_tarjeta(mes: str, ctx_dict: dict[str, Any], perfil: dict[str, Any]) -> dict[str, Any]:
@@ -3954,6 +3978,7 @@ _RUTAS: dict[str, Callable[[str, dict[str, Any], dict[str, Any]], dict[str, Any]
     "affordability": _r_asequibilidad,
     "purchase_evaluation": _r_compra,
     "card_payment": _r_pago_tarjeta,
+    "card_deferral": _r_diferir_tarjeta,
     "debt_strategy": _r_estrategia_deuda,
     "savings": _r_ahorro,
     "fixed_expense": _r_gasto_fijo,
