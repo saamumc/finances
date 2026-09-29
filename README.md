@@ -47,9 +47,11 @@ errores de dominio se muestran como mensajes legibles.
 - Los pagos de tarjeta usan el algoritmo FIFO existente de `database.py`.
 - Pagador, responsabilidad económica y titular legal se muestran por separado.
 - Los gastos se pueden editar desde **Movimientos** sin crear duplicados. Una
-  compra de tarjeta ya abonada conserva sus pagos: se puede corregir total,
-  fecha, categoría, pagador y distribución, siempre que el nuevo total no sea
-  menor que lo ya aplicado a esa compra.
+  compra de tarjeta que ya recibió pagos conserva su importe y distribución
+  económica: se pueden corregir metadatos como nombre, categoría, fecha o
+  pagador, pero no reasignar retrospectivamente la responsabilidad. Para
+  corregir importe o distribución después de un pago, primero deben reversarse
+  los pagos relacionados.
 - Las reversas son *soft-reversals*: el movimiento conserva su historial.
 - La deuda histórica se muestra como tal y se atribuye provisionalmente al
   titular, sin inventar compras.
