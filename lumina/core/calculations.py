@@ -19,8 +19,8 @@ from ..constants import (
     IntegrityError,
     METODO_TARJETA,
     MOV_AHORRO_DEPOSITO,
-    PERSONA1,
-    PERSONA2,
+    SAMUEL,
+    SARA,
     PERSONAS_VALIDAS,
     RESP_COMPARTIDO,
     RESP_P1,
@@ -62,11 +62,11 @@ def calcular_responsabilidad(valor: object, responsabilidad: str) -> tuple[int, 
 
 
 def _monto_de(movimiento: dict[str, Any], persona: str) -> int:
-    return movimiento["monto_p1"] if persona == PERSONA1 else movimiento["monto_p2"]
+    return movimiento["monto_p1"] if persona == SAMUEL else movimiento["monto_p2"]
 
 
 def _aporte_pago(pago: dict[str, Any], persona: str) -> int:
-    return pago["monto_aportado_p1"] if persona == PERSONA1 else pago["monto_aportado_p2"]
+    return pago["monto_aportado_p1"] if persona == SAMUEL else pago["monto_aportado_p2"]
 
 
 def _nuevo_detalle() -> dict[str, dict[str, int]]:
@@ -251,8 +251,8 @@ def resumen_tarjeta(tarjeta: dict[str, Any]) -> dict[str, Any]:
         "pago_minimo": tarjeta["pago_minimo"],
         "interes_mensual": tarjeta["interes_mensual"],
         "interes_estimado": interes_estimado,
-        "deuda_persona1": responsabilidad[PERSONA1],
-        "deuda_persona2": responsabilidad[PERSONA2],
+        "deuda_persona1": responsabilidad[SAMUEL],
+        "deuda_persona2": responsabilidad[SARA],
         "total_pagado": sum(p["monto"] for p in pagos),
         "pagado_persona1": sum(p["monto_aportado_p1"] for p in pagos),
         "pagado_persona2": sum(p["monto_aportado_p2"] for p in pagos),
@@ -288,8 +288,8 @@ def _deuda_compras_conocidas(tarjeta_id: int | None = None) -> dict[str, int]:
         # La regla del dominio conserva la proporción original. El residuo COP
         # se asigna a P2 para que las dos partes sumen exactamente el pendiente.
         pendiente_p1 = round(pendiente * (compra["monto_p1"] / original))
-        resultado[PERSONA1] += pendiente_p1
-        resultado[PERSONA2] += pendiente - pendiente_p1
+        resultado[SAMUEL] += pendiente_p1
+        resultado[SARA] += pendiente - pendiente_p1
     return resultado
 
 
@@ -342,8 +342,8 @@ def _deuda_ajustes_por_responsabilidad(tarjeta_id: int | None = None) -> dict[st
             continue
         p1 = int((Decimal(ajuste["valor_pendiente"]) * Decimal(ajuste["monto_p1"]) /
                   Decimal(ajuste["variacion"])).quantize(Decimal("1"), rounding=ROUND_HALF_UP))
-        resultado[PERSONA1] += p1
-        resultado[PERSONA2] += ajuste["valor_pendiente"] - p1
+        resultado[SAMUEL] += p1
+        resultado[SARA] += ajuste["valor_pendiente"] - p1
     return resultado
 
 
@@ -457,14 +457,14 @@ def balance_historico_pareja(mes: str | None = None) -> dict[str, Any]:
     for movimiento in db.get_compras_tarjeta():
         if movimiento.get("tipo", "COMPRA") == "COMPRA" or (mes is not None and movimiento.get("mes") != mes):
             continue
-        datos[PERSONA1]["consumido"] += movimiento["monto_p1"]
-        datos[PERSONA2]["consumido"] += movimiento["monto_p2"]
+        datos[SAMUEL]["consumido"] += movimiento["monto_p1"]
+        datos[SARA]["consumido"] += movimiento["monto_p2"]
     for ajuste in db.get_ajustes_tarjeta():
         if mes is not None and ajuste["mes"] != mes:
             continue
         signo = 1 if ajuste["variacion"] > 0 else -1
-        datos[PERSONA1]["consumido"] += signo * ajuste["monto_p1"]
-        datos[PERSONA2]["consumido"] += signo * ajuste["monto_p2"]
+        datos[SAMUEL]["consumido"] += signo * ajuste["monto_p1"]
+        datos[SARA]["consumido"] += signo * ajuste["monto_p2"]
 
     for pago in db.get_pagos_deuda(mes=mes):
         for persona in PERSONAS_VALIDAS:
@@ -516,7 +516,7 @@ def explicar_balance(persona: str, mes: str | None = None) -> dict[str, Any]:
     """Devuelve todas las líneas que componen el balance de una persona."""
     validar_persona(persona)
     lineas: list[dict[str, Any]] = []
-    nombre_persona = "Samuel" if persona == PERSONA1 else "Sara"
+    nombre_persona = "Samuel" if persona == SAMUEL else "Sara"
     tarjetas = {tarjeta["id"]: tarjeta["nombre"] for tarjeta in db.get_tarjetas()}
     for gasto in db.get_gastos(mes=mes):
         responsabilidad = _monto_de(gasto, persona)
@@ -538,7 +538,7 @@ def explicar_balance(persona: str, mes: str | None = None) -> dict[str, Any]:
     for movimiento in db.get_compras_tarjeta():
         if movimiento.get("tipo", "COMPRA") == "COMPRA" or (mes is not None and movimiento.get("mes") != mes):
             continue
-        responsabilidad = movimiento["monto_p1"] if persona == PERSONA1 else movimiento["monto_p2"]
+        responsabilidad = movimiento["monto_p1"] if persona == SAMUEL else movimiento["monto_p2"]
         if responsabilidad:
             lineas.append({"tipo": movimiento["tipo"].lower(), "id": movimiento["id"],
                             "detalle": f"{movimiento['tipo'].title()} de tarjeta #{movimiento['id']}: responsabilidad={responsabilidad}",
@@ -546,7 +546,7 @@ def explicar_balance(persona: str, mes: str | None = None) -> dict[str, Any]:
     for ajuste in db.get_ajustes_tarjeta():
         if mes is not None and ajuste["mes"] != mes:
             continue
-        monto = ajuste["monto_p1"] if persona == PERSONA1 else ajuste["monto_p2"]
+        monto = ajuste["monto_p1"] if persona == SAMUEL else ajuste["monto_p2"]
         if monto:
             signo = 1 if ajuste["variacion"] > 0 else -1
             lineas.append({"tipo": "ajuste_tarjeta", "id": ajuste["id"],
@@ -632,7 +632,7 @@ def aporte_por_persona(ahorro_id: int) -> dict[str, int]:
     fondo = next((f for f in db.get_ahorros(solo_activos=False) if f["id"] == ahorro_id), None)
     if fondo is None:
         raise ValidationError("Cajita no encontrada.")
-    return {PERSONA1: fondo["aporte_p1"], PERSONA2: fondo["aporte_p2"]}
+    return {SAMUEL: fondo["aporte_p1"], SARA: fondo["aporte_p2"]}
 
 
 def ahorro_mensual(mes: str) -> int:
@@ -684,7 +684,7 @@ def resumen_deudas_terceros() -> dict[str, Any]:
         titularidad = cuenta.get("titularidad", cuenta["propietario"])
         if titularidad == RESP_COMPARTIDO:
             p1 = cuenta["saldo_pendiente"] // 2
-            partes = {PERSONA1: p1, PERSONA2: cuenta["saldo_pendiente"] - p1}
+            partes = {SAMUEL: p1, SARA: cuenta["saldo_pendiente"] - p1}
         else:
             partes = {titularidad: cuenta["saldo_pendiente"]}
         clave = "por_cobrar" if cuenta["tipo"] == "POR_COBRAR" else "por_pagar"
@@ -824,7 +824,7 @@ def dashboard_personal(persona: str, mes: str) -> dict[str, Any]:
                              "pago_minimo_personal": min(tarjeta["pago_minimo"], deuda_personal)})
     capacidad = max(reconciliacion["caja_operativa"], 0)
     fijos = resumen_gastos_fijos(mes)
-    gastos_fijos_persona = fijos["total_mensual_persona1"] if persona == PERSONA1 else fijos["total_mensual_persona2"]
+    gastos_fijos_persona = fijos["total_mensual_persona1"] if persona == SAMUEL else fijos["total_mensual_persona2"]
     return {
         "persona": persona, "mes": mes, "liquidez": liquidez["liquidez"],
         "caja_disponible": reconciliacion["caja_operativa"], "reconciliacion": reconciliacion,
