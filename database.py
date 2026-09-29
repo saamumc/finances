@@ -642,6 +642,21 @@ def actualizar_gasto(gasto_id: int, mes: str, nombre: str, categoria: str, valor
             abonado = conn.execute("""SELECT COALESCE(SUM(monto_asignado), 0) AS total
                                       FROM asignaciones_pagos WHERE compra_id=?""",
                                    (compra["id"],)).fetchone()["total"]
+            if abonado:
+                # Una vez aplicado un pago, la responsabilidad económica de la
+                # compra queda congelada. Cambiar total/distribución después
+                # del pago reasignaría retrospectivamente una deuda ya
+                # contabilizada.
+                if valor != compra["valor_original"] or (
+                    responsabilidad != compra["responsabilidad"]
+                    or p1 != compra["monto_p1"]
+                    or p2 != compra["monto_p2"]
+                ):
+                    raise ValidationError(
+                        "El total y la distribución de una compra de tarjeta quedan "
+                        "congelados después de aplicar un pago. Reversa primero los "
+                        "pagos relacionados si necesitas corregirlos."
+                    )
             if valor < abonado:
                 raise ValidationError(
                     f"El nuevo total no puede ser menor que los {abonado} ya abonados a esta compra. "
