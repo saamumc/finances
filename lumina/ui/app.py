@@ -16,8 +16,8 @@ try:  # El proyecto admite service.py en la raíz o dentro del paquete frontend/
     from .service import FinanceService, NOMBRES, cargar_preferencias, dinero, guardar_preferencias, mes_actual, parsear_dinero
 except ModuleNotFoundError:
     from .service import FinanceService, NOMBRES, cargar_preferencias, dinero, guardar_preferencias, mes_actual, parsear_dinero
-from ... import ui_kit as ui
-from ...ui_kit import Espacio, Tipo
+from . import kit as ui
+from .kit import Espacio, Tipo
 
 LOG = logging.getLogger("lumina.ui")
 
