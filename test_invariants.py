@@ -2,9 +2,9 @@ import tempfile
 import unittest
 from pathlib import Path
 
-import calculations as calc
-import database as db
-from constants import DuplicateOperationError, IntegrityError
+from lumina.core import calculations as calc
+from lumina.core import database as db
+from lumina.constants import DuplicateOperationError, IntegrityError
 
 
 class FinancialInvariantTests(unittest.TestCase):
