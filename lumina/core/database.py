@@ -1387,13 +1387,18 @@ def actualizar_gasto_fijo(gasto_fijo_id: int, *, nombre: str, categoria: str, va
 
 
 def eliminar_gasto_fijo(gasto_fijo_id: int) -> None:
-    """Elimina la plantilla de un gasto fijo. No borra gastos ya registrados a partir de ella."""
+    """Desactiva una plantilla de gasto fijo; nunca elimina el registro histórico."""
     with get_conn() as conn:
-        existente = conn.execute("SELECT id FROM gastos_fijos WHERE id=?", (gasto_fijo_id,)).fetchone()
+        existente = conn.execute("SELECT id, activo FROM gastos_fijos WHERE id=?", (gasto_fijo_id,)).fetchone()
         if existente is None:
             raise ValidationError("El gasto fijo no existe.")
-        conn.execute("DELETE FROM gastos_fijos WHERE id=?", (gasto_fijo_id,))
-        _log(conn, "gasto_fijo", gasto_fijo_id, "ELIMINAR", "")
+        if not existente["activo"]:
+            return
+        conn.execute(
+            "UPDATE gastos_fijos SET activo=0, actualizado_en=? WHERE id=?",
+            (_now_iso(), gasto_fijo_id),
+        )
+        _log(conn, "gasto_fijo", gasto_fijo_id, "DESACTIVAR", "")
 
 
 def get_gastos_fijos(solo_activos: bool = True) -> list[dict]:
@@ -1860,32 +1865,13 @@ def auditar_reversiones(conn: sqlite3.Connection) -> list[dict[str, Any]]:
 
 
 def corregir_reversiones_orfanas(conn: sqlite3.Connection) -> int:
-    """Elimina registros de reversiones huérfanos (ya no tienen movimiento)."""
+    """Detecta reversiones huérfanas sin borrar evidencia histórica."""
     orfanas = auditar_reversiones(conn)
     if not orfanas:
         print("[database.py] ✓ No hay reversiones orfanas")
         return 0
     
-    print(f"[database.py] ⚠️  Encontradas {len(orfanas)} reversiones orfanas, limpiando...")
-    cursor = conn.cursor()
-    for orfana in orfanas:
-        cursor.execute(
-            "DELETE FROM reversiones_movimientos WHERE id = ?",
-            (orfana['id'],)
-        )
-        cursor.execute(
-            "INSERT INTO movimientos_log (fecha, entidad, entidad_id, accion, detalle) "
-            "VALUES (?, ?, ?, ?, ?)",
-            (
-                dt.datetime.now().isoformat(timespec="seconds"),
-                "reversiones_movimientos",
-                orfana['id'],
-                "LIMPIAR",
-                f"Reversión orfana eliminada (movimiento {orfana['tipo_original']} "
-                f"#{orfana['original_id']} no existe/no está reversado)"
-            )
-        )
-    print(f"[database.py] ✓ Eliminadas {len(orfanas)} reversiones orfanas")
+    print(f"[database.py] ⚠️  Encontradas {len(orfanas)} reversiones orfanas; se conservan para auditoría.")
     return len(orfanas)
 
 
