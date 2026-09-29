@@ -30,11 +30,11 @@ from ..core import calculations as calc
 from ..core import database as db
 from ..core import engine
 from ..constants import (
-    PERSONA1, PERSONA2, PERSONAS_VALIDAS, PRIORIDAD_DISCRECIONAL,
+    SAMUEL, SARA, PERSONAS_VALIDAS, PRIORIDAD_DISCRECIONAL,
     RESP_COMPARTIDO, validar_mes,
 )
 
-NOMBRES: dict[str, str] = {PERSONA1: "Samuel", PERSONA2: "Sara"}
+NOMBRES: dict[str, str] = {SAMUEL: "Samuel", SARA: "Sara"}
 
 # Parámetros de producto del asesor. Están aquí para que cambiar un criterio
 # sea una decisión visible y no una constante escondida en medio de una regla.
@@ -485,7 +485,7 @@ def _candidato_desde_serie(serie: SerieGasto, mes_referencia: str,
     analisis = clasificar_serie(serie, mes_referencia)
     registrado = _coincide_con_gasto_fijo(serie.clave, registrados)
     responsabilidad = serie.modo("responsabilidad") or RESP_COMPARTIDO
-    propietario = serie.modo("pagador") or PERSONA1
+    propietario = serie.modo("pagador") or SAMUEL
     tarjeta_id = serie.modo("tarjeta_id")
     valores = serie.valores
     return {
@@ -715,9 +715,9 @@ def _bloque_ingresos(mes: str) -> dict[str, Any]:
         estabilidad = "estable" if dispersity <= 0.10 else "variable" if dispersity <= 0.30 else "muy variable"
     return {
         "mes": mes, "total": total, "detalle": ingresos,
-        "samuel": por_persona[PERSONA1], "sara": por_persona[PERSONA2],
-        "participacion_samuel": _dividir(por_persona[PERSONA1], total),
-        "participacion_sara": _dividir(por_persona[PERSONA2], total),
+        "samuel": por_persona[SAMUEL], "sara": por_persona[SARA],
+        "participacion_samuel": _dividir(por_persona[SAMUEL], total),
+        "participacion_sara": _dividir(por_persona[SARA], total),
         "total_mes_anterior": total_previo, "variacion_vs_anterior": variacion,
         "fuentes": [{"concepto": nombre, "veces": veces} for nombre, veces in fuentes.most_common()],
         "estabilidad": estabilidad, "referencia": referencia, "historial_por_persona": historial,
@@ -733,13 +733,13 @@ def _bloque_gastos(mes: str) -> dict[str, Any]:
     discrecionales = total - obligatorios
     categorias: dict[str, int] = defaultdict(int)
     metodos: dict[str, int] = defaultdict(int)
-    por_persona = {PERSONA1: 0, PERSONA2: 0}
+    por_persona = {SAMUEL: 0, SARA: 0}
     compartido = 0
     for gasto in gastos:
         categorias[gasto["categoria"]] += gasto["valor"]
         metodos[gasto["metodo_pago"]] += gasto["valor"]
-        por_persona[PERSONA1] += gasto["monto_p1"]
-        por_persona[PERSONA2] += gasto["monto_p2"]
+        por_persona[SAMUEL] += gasto["monto_p1"]
+        por_persona[SARA] += gasto["monto_p2"]
         if gasto["responsabilidad"] == RESP_COMPARTIDO:
             compartido += gasto["valor"]
     fijos = calc.resumen_gastos_fijos(mes)
@@ -753,7 +753,7 @@ def _bloque_gastos(mes: str) -> dict[str, Any]:
         "por_categoria": [{"categoria": nombre, "monto": monto, "participacion": _dividir(monto, total)}
                           for nombre, monto in ranking],
         "por_metodo": dict(metodos),
-        "consumo_samuel": por_persona[PERSONA1], "consumo_sara": por_persona[PERSONA2],
+        "consumo_samuel": por_persona[SAMUEL], "consumo_sara": por_persona[SARA],
         "gasto_compartido": compartido,
         "gastos_fijos_registrados": fijos,
         "gastos_fijos_detectados": detectados,
@@ -870,8 +870,8 @@ def _bloque_pareja(mes: str) -> dict[str, Any]:
     mensual = calc.balance_historico_pareja(mes)
     historico = calc.balance_historico_pareja()
     detalle = historico["detalle"]
-    saldo_samuel = int(historico[f"balance_neto_{PERSONA1}"])
-    saldo_sara = int(historico[f"balance_neto_{PERSONA2}"])
+    saldo_samuel = int(historico[f"balance_neto_{SAMUEL}"])
+    saldo_sara = int(historico[f"balance_neto_{SARA}"])
     if saldo_samuel > 0:
         acreedor, deudor, monto = "Samuel", "Sara", saldo_samuel
     elif saldo_sara > 0:
@@ -886,14 +886,14 @@ def _bloque_pareja(mes: str) -> dict[str, Any]:
         "mes": mes, "mensual": mensual, "historico": historico,
         "saldo_samuel": saldo_samuel, "saldo_sara": saldo_sara,
         "acreedor": acreedor, "deudor": deudor, "monto_pendiente": max(monto, 0),
-        "aportado_samuel": detalle[PERSONA1]["aportado"], "aportado_sara": detalle[PERSONA2]["aportado"],
-        "consumido_samuel": detalle[PERSONA1]["consumido"], "consumido_sara": detalle[PERSONA2]["consumido"],
-        "participacion_aportes_samuel": _dividir(detalle[PERSONA1]["aportado"], aportado_total),
-        "participacion_consumo_samuel": _dividir(detalle[PERSONA1]["consumido"], consumido_total),
+        "aportado_samuel": detalle[SAMUEL]["aportado"], "aportado_sara": detalle[SARA]["aportado"],
+        "consumido_samuel": detalle[SAMUEL]["consumido"], "consumido_sara": detalle[SARA]["consumido"],
+        "participacion_aportes_samuel": _dividir(detalle[SAMUEL]["aportado"], aportado_total),
+        "participacion_consumo_samuel": _dividir(detalle[SAMUEL]["consumido"], consumido_total),
         "liquidaciones_mes": liquidaciones,
         "cuadra": historico["cuadra"], "descuadre": historico["descuadre"],
-        "explicacion_samuel": calc.explicar_balance(PERSONA1, mes),
-        "explicacion_sara": calc.explicar_balance(PERSONA2, mes),
+        "explicacion_samuel": calc.explicar_balance(SAMUEL, mes),
+        "explicacion_sara": calc.explicar_balance(SARA, mes),
     }
 
 
@@ -2647,9 +2647,9 @@ def extraer_monto(texto: str) -> int | None:
 def extraer_persona(texto: str) -> str | None:
     plano = normalizar_texto(texto)
     if "samuel" in plano:
-        return PERSONA1
+        return SAMUEL
     if "sara" in plano:
-        return PERSONA2
+        return SARA
     return None
 
 
@@ -3482,9 +3482,9 @@ def inteligencia_tarjetas(mes: str, perfil: dict[str, Any] | None = None) -> dic
                             "detalle": "Faltan " + ", ".join(tarjeta["datos_faltantes"]) + "."})
 
         deuda_p1, deuda_p2 = tarjeta["deuda_persona1"], tarjeta["deuda_persona2"]
-        del_otro = (deuda_p2 if tarjeta["propietario"] == PERSONA1 else deuda_p1)
+        del_otro = (deuda_p2 if tarjeta["propietario"] == SAMUEL else deuda_p1)
         if del_otro:
-            otro = NOMBRES[PERSONA2] if tarjeta["propietario"] == PERSONA1 else NOMBRES[PERSONA1]
+            otro = NOMBRES[SARA] if tarjeta["propietario"] == SAMUEL else NOMBRES[SAMUEL]
             señales.append({"señal": "responsabilidad_cruzada", "nivel": "info",
                             "detalle": (f"{_cop(del_otro)} del saldo corresponde económicamente a {otro}, "
                                         f"aunque la tarjeta sea de {_nombre(tarjeta['propietario'])}.")})
@@ -3670,9 +3670,9 @@ _REGLAS_INTENCION = _REGLAS_INTENCION + _REGLAS_EXTRA
 
 def _seleccionar_mes_personal(texto: str) -> str | None:
     if "sara" in texto:
-        return PERSONA2
+        return SARA
     if "samuel" in texto:
-        return PERSONA1
+        return SAMUEL
     return None
 
 
