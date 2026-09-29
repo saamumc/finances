@@ -16,12 +16,12 @@ class Persona(str, Enum):
     compatibilidad con las bases existentes; la UI solo presenta Yo y Sara.
     """
 
-    YO = "persona1"
+    SAMUEL = "persona1"
     SARA = "persona2"
 
 
 class Responsabilidad(str, Enum):
-    YO = Persona.YO.value
+    SAMUEL = Persona.SAMUEL.value
     SARA = Persona.SARA.value
     COMPARTIDO = "compartido"
 
@@ -79,13 +79,16 @@ class MovimientoAhorro(str, Enum):
 
 
 # Aliases de compatibilidad: el código nuevo debe usar los Enum anteriores.
-YO: Final[str] = Persona.YO.value
+SAMUEL: Final[str] = Persona.SAMUEL.value
 SARA: Final[str] = Persona.SARA.value
-PERSONA1: Final[str] = YO
+# Compatibilidad con el esquema histórico de SQLite.
+PERSONA1: Final[str] = SAMUEL
 PERSONA2: Final[str] = SARA
-PERSONAS_VALIDAS: Final[tuple[str, str]] = (YO, SARA)
-RESP_P1: Final[str] = Responsabilidad.YO.value
-RESP_P2: Final[str] = Responsabilidad.SARA.value
+PERSONAS_VALIDAS: Final[tuple[str, str]] = (SAMUEL, SARA)
+RESP_SAMUEL: Final[str] = Responsabilidad.SAMUEL.value
+RESP_SARA: Final[str] = Responsabilidad.SARA.value
+RESP_P1: Final[str] = RESP_SAMUEL
+RESP_P2: Final[str] = RESP_SARA
 RESP_COMPARTIDO: Final[str] = Responsabilidad.COMPARTIDO.value
 METODO_EFECTIVO: Final[str] = MetodoPago.EFECTIVO.value
 METODO_DEBITO: Final[str] = MetodoPago.DEBITO.value
