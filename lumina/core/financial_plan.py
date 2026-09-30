@@ -168,15 +168,20 @@ def plan_deuda(mensual_disponible: int) -> dict[str, Any]:
 
 def fondo_emergencia(month: str) -> dict[str, Any]:
     ahorro = calc.resumen_ahorros()
-    emergencia = ahorro.get("emergencia") or {}
-    current = _money(emergencia.get("current"))
-    coverage = float(emergencia.get("coverage_months") or 0)
-    mandatory = calc.flujo_caja_mes(month).get("gastos_fijos_pendientes", 0)
-    # La UI ya calcula cobertura con gasto obligatorio. Reutilizamos esa cifra.
+    fondos = ahorro.get("fondos") or []
+    emergencia_fondos = [f for f in fondos if str(f.get("nombre", "")).strip().casefold() in {"emergencia", "fondo de emergencia", "fondo emergencia"}]
+    current = sum(_money(f.get("saldo")) for f in emergencia_fondos)
+    fijos = calc.resumen_gastos_fijos(month)
+    mandatory = int(fijos.get("total_mensual_equivalente") or 0)
+    coverage = (current / mandatory) if mandatory > 0 else 0.0
+    # Si existe configuración v15 explícita, respétala; de lo contrario 1/3/6.
+    with db.get_conn() as conn:
+        cfg = conn.execute("SELECT meses_minimo, meses_base, meses_robusto FROM fondo_emergencia_config ORDER BY id DESC LIMIT 1").fetchone()
+    min_m, base_m, robust_m = (int(cfg[0]), int(cfg[1]), int(cfg[2])) if cfg else (1, 3, 6)
     targets = {
-        "minimo": max(0, int(round(mandatory))),
-        "base": max(0, int(round(mandatory * 3))),
-        "robusto": max(0, int(round(mandatory * 6))),
+        "minimo": max(0, mandatory * min_m),
+        "base": max(0, mandatory * base_m),
+        "robusto": max(0, mandatory * robust_m),
     }
     return {
         "actual": current, "cobertura_meses": coverage,
