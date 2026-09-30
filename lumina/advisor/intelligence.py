@@ -2832,7 +2832,7 @@ def _r_diferir_tarjeta(mes: str, ctx_dict: dict[str, Any], perfil: dict[str, Any
     texto = (
         "Sí puedo analizar un diferimiento, pero no voy a asumir que se puede diferir una tarjeta completa. "
         "Normalmente el diferimiento se aplica a una compra o saldo concreto y depende de las condiciones "
-        "de la entidad. Para decirles qué conviene necesito saber: qué tarjeta, qué compra o saldo quieren "
+        "de la entidad. Para decirles qué conviene necesito saber: qué tarjeta(s) quieres diferir, qué compra o saldo quieres "
         "diferir y a cuántas cuotas. Con esos datos puedo comparar el costo y el efecto sobre los pagos."
     )
     return _respuesta(
