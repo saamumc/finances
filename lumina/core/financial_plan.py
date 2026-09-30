@@ -147,11 +147,36 @@ def registrar_movimiento_inversion(inversion_id: int, tipo: str, monto: int,
         existe = conn.execute("SELECT id FROM movimientos_inversion WHERE transaction_uuid=?", (tx_uuid,)).fetchone()
         if existe:
             return int(existe["id"])
-        existe = conn.execute(
-            "SELECT id FROM inversiones WHERE id=? AND activa=1", (inversion_id,)
+        inversion = conn.execute(
+            "SELECT * FROM inversiones WHERE id=? AND activa=1", (inversion_id,)
         ).fetchone()
-        if existe is None:
+        if inversion is None:
             raise ValueError("La inversión no existe o está inactiva.")
+        apertura = dt.date.fromisoformat(inversion["fecha_apertura"])
+        if dt.date.fromisoformat(fecha_real) < apertura:
+            raise ValueError("La fecha del movimiento no puede ser anterior a la apertura de la inversión.")
+
+        rows = conn.execute(
+            """SELECT tipo, monto, COALESCE(variacion_valor, 0) AS variacion_valor
+               FROM movimientos_inversion
+               WHERE inversion_id=? AND estado='ACTIVO'
+               ORDER BY fecha, id""",
+            (inversion_id,),
+        ).fetchall()
+        aportes = sum(int(r["monto"]) for r in rows if r["tipo"] == "APORTE")
+        retiros = sum(int(r["monto"]) for r in rows if r["tipo"] == "RETIRO")
+        valoraciones = sum(int(r["variacion_valor"]) for r in rows if r["tipo"] == "VALORACION")
+        valor_actual = aportes - retiros + valoraciones
+
+        if tipo == "RETIRO" and monto > valor_actual:
+            raise ValueError(
+                f"El retiro ({monto}) supera el valor actual disponible de la inversión ({valor_actual})."
+            )
+        if tipo == "VALORACION" and valor_actual + variacion < 0:
+            raise ValueError(
+                "La valoración no puede llevar el valor de la inversión por debajo de cero."
+            )
+
         cur = conn.execute(
             """INSERT INTO movimientos_inversion
                (inversion_id, fecha, tipo, monto, variacion_valor, estado, transaction_uuid)
@@ -159,6 +184,51 @@ def registrar_movimiento_inversion(inversion_id: int, tipo: str, monto: int,
             (inversion_id, fecha_real, tipo, almacenado, variacion, tx_uuid),
         )
         return int(cur.lastrowid)
+
+
+def reversar_movimiento_inversion(movimiento_id: int, motivo: str) -> None:
+    motivo = str(motivo or "").strip()
+    if not motivo:
+        raise ValueError("El motivo de reversión es obligatorio.")
+    with db.get_conn() as conn:
+        movimiento = conn.execute(
+            "SELECT * FROM movimientos_inversion WHERE id=?", (movimiento_id,)
+        ).fetchone()
+        if movimiento is None or movimiento["estado"] != "ACTIVO":
+            raise ValueError("El movimiento de inversión no existe o ya está reversado.")
+
+        if movimiento["tipo"] == "APORTE":
+            rows = conn.execute(
+                """SELECT tipo, monto, COALESCE(variacion_valor, 0) AS variacion_valor
+                   FROM movimientos_inversion
+                   WHERE inversion_id=? AND estado='ACTIVO' AND id<>?
+                   ORDER BY fecha, id""",
+                (movimiento["inversion_id"], movimiento_id),
+            ).fetchall()
+            valor_sin = (
+                sum(int(r["monto"]) for r in rows if r["tipo"] == "APORTE")
+                - sum(int(r["monto"]) for r in rows if r["tipo"] == "RETIRO")
+                + sum(int(r["variacion_valor"]) for r in rows if r["tipo"] == "VALORACION")
+            )
+            if valor_sin < 0:
+                raise ValueError(
+                    "No se puede reversar el aporte: movimientos posteriores dependen de ese capital."
+                )
+
+        inverso = -int(movimiento["monto"]) if movimiento["tipo"] == "APORTE" else int(movimiento["monto"])
+        if movimiento["tipo"] == "VALORACION":
+            inverso = -int(movimiento["variacion_valor"] or 0)
+        db._registrar_reversion_movimiento(
+            conn, tipo_original="inversion", original_id=movimiento_id,
+            monto_inverso=inverso, motivo=motivo
+        )
+        conn.execute(
+            """UPDATE movimientos_inversion
+               SET estado='REVERSADO', motivo_reversion=?, fecha_reversion=?
+               WHERE id=?""",
+            (motivo, _now(), movimiento_id),
+        )
+        db._log(conn, "movimiento_inversion", movimiento_id, "REVERSAR", motivo)
 
 
 def desactivar_inversion(inversion_id: int) -> None:
