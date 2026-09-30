@@ -880,7 +880,7 @@ def _bloque_flujo(mes: str, ingresos: dict[str, Any], gastos: dict[str, Any],
     patrimonio = calc.patrimonio_liquido(mes)
     fijos = gastos["gastos_fijos_registrados"]
     comprometido = fijos["pendiente_este_mes"] + tarjetas["pago_minimo_total"] + ahorro["aporte_requerido_metas"]
-    margen = round(ingresos["total"] * float(PARAMS["margen_seguridad_pct"]))
+    margen = int((Decimal(str(ingresos["total"])) * Decimal(str(PARAMS["margen_seguridad_pct"]))).quantize(Decimal("1"), rounding=ROUND_HALF_UP))
     disponible = patrimonio["disponible_gastos_recurrentes"]
     libre = disponible - tarjetas["pago_minimo_total"] - margen
     return {
