@@ -96,3 +96,11 @@ errores de dominio se muestran como mensajes legibles.
   interpretarse como un cierre histórico exacto sin snapshots.
 - El asesor ofrece señales determinísticas, no asesoría financiera profesional;
   si faltan ingresos o historial reduce su confianza en lugar de estimar datos.
+
+---
+
+## Firma
+
+**saamu_mc** · firma de autoría de Lúmina
+
+La firma también aparece de forma discreta en la interfaz, integrada en la barra lateral sin modificar el sistema visual existente.
