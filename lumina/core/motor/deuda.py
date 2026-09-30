@@ -8,7 +8,7 @@ half-up en cada período.
 from __future__ import annotations
 
 import datetime as dt
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from typing import Any, Callable
 
 from .dinero import cop, interes_cop
@@ -36,11 +36,17 @@ def simular_cascada(
         if saldo <= 0:
             continue
         minimo = min(cop(fila.get("minimo", 0)), saldo)
+        try:
+            tasa = Decimal(str(fila.get("tasa_mensual", 0)))
+        except (InvalidOperation, ValueError) as exc:
+            raise ValueError("La tasa mensual de una deuda no es válida.") from exc
+        if not tasa.is_finite() or tasa < 0:
+            raise ValueError("La tasa mensual de una deuda debe ser finita y no negativa.")
         work.append({
             **fila,
             "saldo": saldo,
             "minimo": minimo,
-            "tasa_mensual": Decimal(str(fila.get("tasa_mensual", 0))),
+            "tasa_mensual": tasa,
             "intereses": 0,
             "pagado": 0,
         })
@@ -127,7 +133,12 @@ def proyectar_una_deuda(
 ) -> tuple[int | None, int]:
     saldo = cop(saldo)
     pago = cop(pago)
-    tasa = Decimal(str(tasa_mensual))
+    try:
+        tasa = Decimal(str(tasa_mensual))
+    except (InvalidOperation, ValueError) as exc:
+        raise ValueError("La tasa mensual no es válida.") from exc
+    if not tasa.is_finite() or tasa < 0:
+        raise ValueError("La tasa mensual debe ser finita y no negativa.")
     if saldo <= 0:
         return 0, 0
 
