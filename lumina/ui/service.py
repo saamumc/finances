@@ -54,11 +54,16 @@ class _AdvisorFacade:
         )
 
     def proyectar_deuda(self, tarjeta_id: int, extra: int) -> dict[str, Any]:
-        return _advisor_intelligence.responder(
-            mes_actual(),
-            "Proyecta la deuda de mis tarjetas y cómo terminar de pagarla.",
-            monto=extra if extra > 0 else None,
-        )
+        mes = mes_actual()
+        presupuesto = int(extra)
+        if presupuesto <= 0:
+            raise ValueError("El pago mensual proyectado debe ser mayor que cero.")
+        try:
+            return _advisor_intelligence.engine.unified_debt_payoff(
+                presupuesto, "avalancha", start_month=mes
+            )
+        except ValueError as error:
+            return {"viable": False, "error": str(error), "mes": mes, "presupuesto": presupuesto}
 
     def responder_pregunta(self, mes: str, pregunta: str, *,
                            monto: int | None = None) -> dict[str, Any]:
