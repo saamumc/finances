@@ -18,6 +18,7 @@ from __future__ import annotations
 import datetime as dt
 import re
 import unicodedata
+from decimal import Decimal
 from collections import Counter, defaultdict
 from dataclasses import dataclass, field
 from math import ceil
@@ -29,6 +30,7 @@ from . import findings as af
 from ..core import calculations as calc
 from ..core import database as db
 from ..core import engine
+from ..core.motor.dinero import interes_cop, porcentaje_a_decimal
 from ..constants import (
     SAMUEL, SARA, PERSONAS_VALIDAS, PRIORIDAD_DISCRECIONAL,
     RESP_COMPARTIDO, validar_mes,
@@ -744,7 +746,9 @@ def _bloque_tarjetas(mes: str) -> dict[str, Any]:
         actividad = calc.resumen_mensual_tarjeta(tarjeta["id"], mes)
         crecimiento = actividad["compras"] + actividad["intereses"] + actividad["cargos"] - actividad["pagos"]
         minimo = min(tarjeta["pago_minimo"], tarjeta["saldo_deuda"])
-        proyeccion = tarjeta["saldo_deuda"] + round(tarjeta["saldo_deuda"] * tarjeta["interes_mensual"] / 100) - minimo
+        proyeccion = tarjeta["saldo_deuda"] + interes_cop(
+            tarjeta["saldo_deuda"], porcentaje_a_decimal(tarjeta["interes_mensual"])
+        ) - minimo
         detalle.append({
             **tarjeta,
             "titular_nombre": _nombre(tarjeta["propietario"]),
@@ -1518,7 +1522,7 @@ def opciones_de_pago(mes: str, monto: int, *, concepto: str = "esta compra",
         disponible = tarjeta["cupo_disponible"]
         viable = disponible >= monto
         uso_nuevo = _dividir(tarjeta["saldo_deuda"] + monto, tarjeta["cupo_total"]) or 1.0
-        interes = round(monto * tarjeta["interes_mensual"] / 100)
+        interes = interes_cop(monto, porcentaje_a_decimal(tarjeta["interes_mensual"]))
         penalizacion = 0
         if uso_nuevo >= float(PARAMS["utilizacion_critica"]):
             penalizacion = 45
@@ -1674,7 +1678,7 @@ def simular_escenario_detallado(mes: str, tipo: str, monto: int, *, tarjeta_id: 
         # No pagar libera caja hoy, pero el saldo sigue generando intereses.
         tasa_media = _dividir(deuda["interes_mensual_estimado"], max(tarjetas["deuda_total"], 1)) or 0.0
         delta_liquidez = monto
-        delta_deuda = round(monto + monto * tasa_media)
+        delta_deuda = monto + interes_cop(monto, tasa_media)
 
     deuda_tarjetas_despues = max(antes["deuda_tarjetas"] + (delta_deuda if tipo != "nueva_deuda" else 0), 0)
     despues = {
@@ -1705,7 +1709,10 @@ def simular_escenario_detallado(mes: str, tipo: str, monto: int, *, tarjeta_id: 
     if despues["utilizacion"] >= float(PARAMS["utilizacion_alta"]) > antes["utilizacion"]:
         riesgos.append(f"La utilización global subiría a {_pct(despues['utilizacion'], 0)}.")
     if tipo == "pago_tarjeta" and tarjetas["deuda_total"]:
-        interes_evitado = round(monto * (deuda["interes_mensual_estimado"] / max(tarjetas["deuda_total"], 1)))
+        interes_evitado = interes_cop(
+            monto,
+            Decimal(str(deuda["interes_mensual_estimado"] / max(tarjetas["deuda_total"], 1)))
+        )
         notas.append(f"Evitaría alrededor de {_cop(interes_evitado)} de interés mensual estimado.")
     if tipo == "no_pagar_tarjeta":
         riesgos.append("No conozco las condiciones de mora de cada banco, así que el costo real de no "
