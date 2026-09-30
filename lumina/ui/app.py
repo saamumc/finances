@@ -53,6 +53,7 @@ class FinanzasApp(ctk.CTk):
             ("Cajitas","◇",self.show_savings),
             ("Tarjetas","▣",self.show_cards),
             ("Plan financiero","◈",self.show_financial_os),
+            ("Inversiones","◎",self.show_investments),
             ("Deudas","⊘",self.show_debts),
             ("Asesor","✦",self.show_advisor),
             ("Análisis","▦",self.show_analytics),
@@ -1856,6 +1857,55 @@ class FinanzasApp(ctk.CTk):
                 signo="+" if linea["efecto"]>=0 else "−"
                 ctk.CTkLabel(razones,text=f"{signo}{dinero(abs(linea['efecto']))} · {linea['detalle']}",text_color=T.TXT,wraplength=850,justify="left").pack(anchor="w",padx=26,pady=2)
         ctk.CTkFrame(razones,height=10,fg_color="transparent").pack()
+
+    def show_investments(self)->None:
+        self._clear("Inversiones","Inversiones")
+        self._heading("Inversiones","Capital invertido, movimientos, valor actual y evolución registrada.")
+        self.add_button.configure(text="＋ Nueva inversión",command=self.investment_create_dialog)
+        resumen=self.service.resumen_inversiones()
+        self._metric(2,0,"Valor actual",dinero(resumen["total"]),"Capital + variaciones registradas",T.PRIMARY)
+        self._metric(2,1,"Aportes",dinero(resumen["aportes"]),f"{resumen['cantidad']} inversión(es)",T.OK)
+        self._metric(2,2,"Retiros",dinero(resumen["retiros"]),"Salidas registradas",T.WARN)
+        self._metric(2,3,"Variación",dinero(resumen["valoraciones"]),"Solo valoraciones registradas",T.SAVE if resumen["valoraciones"]>=0 else T.BAD)
+        if not resumen["inversiones"]:
+            self._place(ui.estado_vacio(self.content,"Todavía no hay inversiones","Crea una inversión para comenzar a registrar aportes, retiros y valoraciones.",accion="＋ Crear inversión",comando=self.investment_create_dialog,icono="◎"),3,0,4)
+            return
+        self._section(3,"Portafolio","Cada valor se deriva exclusivamente de los movimientos registrados.")
+        for indice,inv in enumerate(resumen["inversiones"]):
+            caja=self._open_panel(4+indice//2,indice%2*2,2)
+            cab=ui.fila(caja); cab.pack(fill="x",padx=Espacio.PANEL_PAD,pady=(Espacio.MD,2))
+            ctk.CTkLabel(cab,text=inv["nombre"],font=Tipo.tarjeta(),text_color=T.TXT).pack(side="left")
+            ui.insignia(cab,inv["clase"].upper(),tono="suave").pack(side="right")
+            ui.ayuda(caja,f'Titular: {inv["titular"]} · Riesgo: {inv["riesgo"]} · Liquidez: {inv["liquidez"]}',ancho=420).pack(anchor="w",padx=Espacio.PANEL_PAD)
+            ctk.CTkLabel(caja,text=dinero(inv["valor_actual"]),font=Tipo.numero(),text_color=T.PRIMARY).pack(anchor="w",padx=Espacio.PANEL_PAD,pady=(8,2))
+            ctk.CTkLabel(caja,text=f'Aportes {dinero(inv["aportes"])} · retiros {dinero(inv["retiros"])} · variación {dinero(inv["valoraciones"])}',text_color=T.MUTED).pack(anchor="w",padx=Espacio.PANEL_PAD,pady=(0,8))
+            fila=ui.fila(caja); fila.pack(fill="x",padx=Espacio.PANEL_PAD,pady=(0,Espacio.MD))
+            ctk.CTkButton(fila,text="＋ Aporte",height=32,fg_color=T.PRIMARY,command=lambda x=inv["id"]: self.investment_movement_dialog(x,"APORTE")).pack(side="left",padx=(0,5))
+            ctk.CTkButton(fila,text="− Retiro",height=32,fg_color=T.ALT,text_color=T.TXT,command=lambda x=inv["id"]: self.investment_movement_dialog(x,"RETIRO")).pack(side="left",padx=5)
+            ctk.CTkButton(fila,text="↗ Valorar",height=32,fg_color=T.ALT,text_color=T.TXT,command=lambda x=inv["id"]: self.investment_movement_dialog(x,"VALORACION")).pack(side="left",padx=5)
+
+    def investment_create_dialog(self)->None:
+        d=ctk.CTkToplevel(self,fg_color=T.BG); d.title("Nueva inversión"); d.geometry("560x700"); d.minsize(460,600); d.grab_set()
+        body=ctk.CTkScrollableFrame(d,fg_color=T.S,corner_radius=Espacio.RADIO); body.pack(fill="both",expand=True,padx=14,pady=14)
+        ctk.CTkLabel(body,text="◎ Nueva inversión",font=Tipo.dialogo()).pack(anchor="w",padx=18,pady=(18,2))
+        name=self._entry(body,"Nombre"); clase=self._entry(body,"Clase","cdt",["cdt","fic","etf","accion","bono","efectivo","pension","otro"])
+        titular=self._entry(body,"Titular","persona1",["persona1","persona2","compartido"]); riesgo=self._entry(body,"Riesgo","medio",["bajo","medio","alto"])
+        liquidez=self._entry(body,"Liquidez","media",["alta","media","baja"]); entidad=self._entry(body,"Entidad (opcional)")
+        horizonte=self._entry(body,"Horizonte en meses (opcional)"); comision=self._entry(body,"Comisión anual (puntos básicos)","0")
+        apertura=self._entry(body,"Fecha de apertura (AAAA-MM-DD, opcional)"); vencimiento=self._entry(body,"Fecha de vencimiento (AAAA-MM-DD, opcional)")
+        def save()->None:
+            h=self._value(horizonte); payload={"nombre":self._value(name),"clase":self._value(clase),"titular":self._value(titular),"riesgo":self._value(riesgo),"liquidez":self._value(liquidez),"entidad":self._value(entidad) or None,"horizonte_meses":int(h) if h else None,"comision_pb_anual":int(self._value(comision) or 0),"fecha_apertura":self._value(apertura) or None,"fecha_vencimiento":self._value(vencimiento) or None}
+            self.service.crear_inversion(payload); d.destroy(); self.show_investments()
+        ctk.CTkButton(body,text="Crear inversión",height=40,fg_color=T.PRIMARY,command=lambda:self._run(save,"Inversión creada")).pack(fill="x",padx=18,pady=22)
+
+    def investment_movement_dialog(self,inversion_id:int,tipo:str)->None:
+        d=ctk.CTkToplevel(self,fg_color=T.BG); d.title(tipo.title()); d.geometry("460x360"); d.grab_set()
+        body=ctk.CTkFrame(d,fg_color=T.S); body.pack(fill="both",expand=True,padx=14,pady=14)
+        ctk.CTkLabel(body,text=tipo.title(),font=Tipo.dialogo()).pack(anchor="w",padx=18,pady=(18,2))
+        monto=self._entry(body,"Monto COP"); fecha=self._entry(body,"Fecha (AAAA-MM-DD, opcional)")
+        def save()->None:
+            self.service.registrar_movimiento_inversion(inversion_id,tipo,self._value(monto),self._value(fecha) or None); d.destroy(); self.show_investments()
+        ctk.CTkButton(body,text="Guardar movimiento",height=40,fg_color=T.PRIMARY,command=lambda:self._run(save,"Movimiento registrado")).pack(fill="x",padx=18,pady=22)
 
     def show_financial_os(self)->None:
         self._clear("Plan financiero","Plan financiero")
