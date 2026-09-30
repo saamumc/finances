@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import datetime as dt
+from decimal import Decimal
 from math import ceil
 from typing import Any
 
@@ -176,6 +177,7 @@ def fondo_emergencia(mes: str) -> dict[str, Any]:
 def proyectar_deuda(tarjeta_id: int, pago_adicional: int = 0) -> dict[str, Any]:
     """Proyecta una tarjeta usando el mismo motor determinista de deuda."""
     from ..core.motor.deuda import proyectar_una_deuda
+    from ..core.motor.dinero import interes_cop
 
     tarjeta = next((t for t in calc.resumen_tarjetas() if t["id"] == tarjeta_id), None)
     if tarjeta is None:
@@ -184,9 +186,9 @@ def proyectar_deuda(tarjeta_id: int, pago_adicional: int = 0) -> dict[str, Any]:
         raise ValueError("El pago adicional no puede ser negativo.")
 
     saldo = int(tarjeta["saldo_deuda"])
-    tasa = calc.Decimal(str(tarjeta["interes_mensual"])) / calc.Decimal("100")
+    tasa = Decimal(str(tarjeta["interes_mensual"])) / Decimal("100")
     pago_base = min(max(int(tarjeta["pago_minimo"]), 0), saldo)
-    pago_mejorado = min(saldo + calc.interes_cop(saldo, tasa), pago_base + int(pago_adicional))
+    pago_mejorado = min(saldo + interes_cop(saldo, tasa), pago_base + int(pago_adicional))
 
     meses_actual, interes_actual = proyectar_una_deuda(saldo, tasa, pago_base)
     meses_mejorado, interes_mejorado = proyectar_una_deuda(saldo, tasa, pago_mejorado)
