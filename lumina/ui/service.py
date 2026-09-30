@@ -613,6 +613,32 @@ class FinanceService:
                                           parsear_dinero(datos["monto"]))
 
     # ------------------------------------------------------------------
+    def modelo_pareja(self, mes: str) -> dict | None:
+        return db.get_modelo_pareja(mes)
+
+    def guardar_modelo_pareja(self, datos: dict[str, Any]) -> int:
+        return db.guardar_modelo_pareja(
+            datos["desde_mes"], datos["modelo"],
+            base_proporcional=datos.get("base_proporcional"),
+            pozo_aporte_p1=datos.get("pozo_aporte_p1"),
+            pozo_aporte_p2=datos.get("pozo_aporte_p2"),
+            transaction_uuid=datos.get("transaction_uuid"),
+        )
+
+    def reparto_pareja(self, monto: Any, mes: str) -> dict[str, Any]:
+        return calc.reparto_pareja(parsear_dinero(monto), mes)
+
+    def aportes_pozo(self, mes: str | None = None) -> list[dict]:
+        return db.get_aportes_pozo(mes)
+
+    def registrar_aporte_pozo(self, datos: dict[str, Any]) -> int:
+        return db.registrar_aporte_pozo(
+            datos["mes"], datos["fecha"], _persona(datos["persona"]),
+            parsear_dinero(datos["monto"]), datos.get("concepto", ""),
+            transaction_uuid=datos.get("transaction_uuid"),
+        )
+
+
     # Balance de pareja
     # ------------------------------------------------------------------
     def estado_actual(self, mes: str) -> dict[str, Any]:

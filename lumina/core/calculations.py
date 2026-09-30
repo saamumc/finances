@@ -433,6 +433,58 @@ def historial_tarjeta(tarjeta_id: int, incluir_reversados: bool = True) -> list[
 
 
 # ---------------------------------------------------------------------------
+def ingresos_promedio_tres_meses(persona: str, mes: str) -> int:
+    """Promedio entero de ingresos activos de los tres meses incluido mes."""
+    validar_persona(persona)
+    base = dt.date.fromisoformat(mes + "-01")
+    meses = []
+    for offset in (2, 1, 0):
+        indice = base.year * 12 + base.month - 1 - offset
+        year, month0 = divmod(indice, 12)
+        meses.append(f"{year:04d}-{month0 + 1:02d}")
+    total = 0
+    for item_mes in meses:
+        total += sum(
+            int(i["valor"]) for i in db.get_ingresos(item_mes)
+            if i["persona"] == persona and i["estado"] == ESTADO_ACTIVO
+        )
+    return int(Decimal(total) / Decimal(3) + Decimal("0.5"))
+
+
+def reparto_pareja(monto: int, mes: str, modelo: dict | None = None) -> dict[str, Any]:
+    """Calcula un reparto vigente; no crea ni modifica liquidaciones."""
+    from .motor.pareja import repartir
+
+    vigente = modelo or db.get_modelo_pareja(mes)
+    if not vigente:
+        return {
+            "estado": "requiere_confirmacion",
+            "modelo": None,
+            "monto": int(monto),
+            "monto_p1": 0,
+            "monto_p2": 0,
+            "nota": "No existe un modelo de pareja vigente para este mes.",
+        }
+
+    i1 = ingresos_promedio_tres_meses(SAMUEL, mes) if vigente["base_proporcional"] == "ingreso_promedio" else 0
+    i2 = ingresos_promedio_tres_meses(SARA, mes) if vigente["base_proporcional"] == "ingreso_promedio" else 0
+    if vigente["modelo"] == "proporcional" and vigente["base_proporcional"] == "ingreso_mes":
+        i1 = sum(int(x["valor"]) for x in db.get_ingresos(mes) if x["persona"] == SAMUEL and x["estado"] == ESTADO_ACTIVO)
+        i2 = sum(int(x["valor"]) for x in db.get_ingresos(mes) if x["persona"] == SARA and x["estado"] == ESTADO_ACTIVO)
+
+    aportes = db.get_aportes_pozo(mes)
+    pozo1 = sum(int(x["monto"]) for x in aportes if x["persona"] == SAMUEL)
+    pozo2 = sum(int(x["monto"]) for x in aportes if x["persona"] == SARA)
+    return repartir(
+        int(monto),
+        vigente["modelo"],
+        ingreso_p1=i1,
+        ingreso_p2=i2,
+        aporte_pozo_p1=pozo1 if pozo1 else int(vigente.get("pozo_aporte_p1") or 0),
+        aporte_pozo_p2=pozo2 if pozo2 else int(vigente.get("pozo_aporte_p2") or 0),
+    )
+
+
 # Balance de pareja
 # ---------------------------------------------------------------------------
 

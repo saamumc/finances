@@ -971,6 +971,91 @@ def reversar_pago_tarjeta(pago_id: int, motivo: str) -> None:
         _log(conn, "pago_deuda", pago_id, "REVERSAR", motivo)
 
 
+def get_modelo_pareja(mes: str | None = None) -> dict | None:
+    """Devuelve el modelo de pareja vigente para un mes."""
+    target = mes or dt.date.today().strftime("%Y-%m")
+    with get_connection() as conn:
+        row = conn.execute(
+            """SELECT * FROM modelo_pareja
+               WHERE estado=? AND desde_mes<=?
+               ORDER BY desde_mes DESC, id DESC LIMIT 1""",
+            (ESTADO_ACTIVO, target),
+        ).fetchone()
+    return dict(row) if row else None
+
+
+def guardar_modelo_pareja(
+    desde_mes: str,
+    modelo: str,
+    *,
+    base_proporcional: str | None = None,
+    pozo_aporte_p1: int | None = None,
+    pozo_aporte_p2: int | None = None,
+    transaction_uuid: str | None = None,
+) -> int:
+    """Versiona un modelo sin modificar liquidaciones históricas."""
+    validar_mes(desde_mes)
+    if modelo not in {"5050", "proporcional", "pozo"}:
+        raise ValidationError("Modelo de pareja no válido.")
+    if modelo == "proporcional" and base_proporcional not in {"ingreso_mes", "ingreso_promedio"}:
+        raise ValidationError("El modelo proporcional requiere una base de ingresos.")
+    if modelo == "pozo" and (pozo_aporte_p1 is None or pozo_aporte_p2 is None):
+        raise ValidationError("El modelo de pozo requiere los aportes iniciales.")
+    tx_uuid = transaction_uuid or str(uuid.uuid4())
+    with get_connection() as conn:
+        row = conn.execute(
+            """SELECT id FROM modelo_pareja
+               WHERE transaction_uuid=?""", (tx_uuid,)
+        ).fetchone()
+        if row:
+            return int(row["id"])
+        cur = conn.execute(
+            """INSERT INTO modelo_pareja
+               (desde_mes, modelo, base_proporcional, pozo_aporte_p1, pozo_aporte_p2,
+                creado_en, estado, transaction_uuid)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+            (desde_mes, modelo, base_proporcional, pozo_aporte_p1, pozo_aporte_p2,
+             _now_iso(), ESTADO_ACTIVO, tx_uuid),
+        )
+        _log(conn, "modelo_pareja", cur.lastrowid, "CREAR", f"{modelo}; desde={desde_mes}")
+        return int(cur.lastrowid)
+
+
+def get_aportes_pozo(mes: str | None = None) -> list[dict]:
+    query = "SELECT * FROM aportes_pozo WHERE estado=?"
+    params: list[object] = [ESTADO_ACTIVO]
+    if mes:
+        query += " AND mes=?"
+        params.append(mes)
+    query += " ORDER BY fecha, id"
+    with get_connection() as conn:
+        return [dict(row) for row in conn.execute(query, params).fetchall()]
+
+
+def registrar_aporte_pozo(
+    mes: str, fecha: str, persona: str, monto: object, concepto: str = "",
+    transaction_uuid: str | None = None,
+) -> int:
+    validar_mes(mes)
+    persona = validar_persona(persona)
+    monto = validar_monto_positivo(monto)
+    tx_uuid = transaction_uuid or str(uuid.uuid4())
+    with get_connection() as conn:
+        row = conn.execute(
+            "SELECT id FROM aportes_pozo WHERE transaction_uuid=?", (tx_uuid,)
+        ).fetchone()
+        if row:
+            return int(row["id"])
+        cur = conn.execute(
+            """INSERT INTO aportes_pozo
+               (mes, fecha, persona, monto, concepto, estado, transaction_uuid)
+               VALUES (?, ?, ?, ?, ?, ?, ?)""",
+            (mes, fecha, persona, monto, concepto, ESTADO_ACTIVO, tx_uuid),
+        )
+        _log(conn, "aporte_pozo", cur.lastrowid, "CREAR", f"{persona}; monto={monto}")
+        return int(cur.lastrowid)
+
+
 def registrar_liquidacion(mes: str, fecha: str, deudor: str, acreedor: str, monto: object,
                           concepto: str | None = None, transaction_uuid: str | None = None) -> int:
     """Registra una liquidación. Se permite excedente: crea saldo a favor explícito en el cálculo."""
