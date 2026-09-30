@@ -223,7 +223,8 @@ def readiness(month: str) -> dict[str, Any]:
     deuda = resumen_deudas()
     emergencia = fondo_emergencia(month)
     inversiones = resumen_inversiones()
-    libre = max(0, int(patrimonio.get("disponible_gastos_recurrentes", 0)))
+    # El margen de inversión usa el flujo mensual real, no un campo patrimonial ambiguo.
+    libre = max(0, int(flujo.get("ahorro", 0)) - int(patrimonio.get("gastos_fijos_pendientes", 0)))
     razones = []
     if deuda["tarjetas_total"] > 0:
         razones.append("Hay deuda activa de tarjetas.")
