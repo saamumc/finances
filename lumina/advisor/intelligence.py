@@ -2099,7 +2099,7 @@ def construir_hallazgos(perfil: dict[str, Any], *, detectados: dict[str, Any], c
                 f"Pausen compras nuevas ahí y definan un abono por encima del mínimo ({_cop(tarjeta['pago_minimo'])}) "
                 "antes del próximo corte.",
                 (f"Cada {_cop(100000)} abonados evitan cerca de "
-                 f"{_cop(round(100000 * tarjeta['interes_mensual'] / 100))} de interés mensual."
+                 f"{_cop(round(tarjeta['interes_estimado']))} de interés mensual."
                  if tarjeta["interes_mensual"] else
                  "Sin tasa registrada no puedo cuantificar el ahorro en intereses."),
                 {"tarjeta_id": tarjeta["id"], "utilizacion": tarjeta["utilizacion"], "saldo": tarjeta["saldo"],
