@@ -271,10 +271,7 @@ def financial_os(month: str, presupuesto_deuda: int | None = None) -> dict[str, 
         prioridades.append({"orden": 1, "clave": "deuda", "titulo": "Ordenar deudas", "detalle": "Comparar pagos mínimos y estrategias antes de aumentar aportes de inversión."})
     if estado["deudas"]["total"] == 0 and estado["emergencia"]["faltante_base"] > 0:
         prioridades.append({"orden": 1, "clave": "emergencia", "titulo": "Construir fondo de emergencia", "detalle": "Completar la meta base usando la capacidad mensual real."})
-    if estado["deudas"]["tarjetas_total"] > 0:
-
-        prioridades.append({"orden": 1, "clave": "deuda", "titulo": "Ordenar deuda cara", "detalle": "Comparar mínimos y estrategias antes de aumentar aportes de inversión."})
-    if estado["deudas"]["total"] > 0 and estado["emergencia"]["faltante_base"] > 0:
+    elif estado["deudas"]["total"] > 0 and estado["emergencia"]["faltante_base"] > 0:
         prioridades.append({"orden": 2, "clave": "emergencia", "titulo": "Construir fondo de emergencia", "detalle": "Completar la meta base usando la capacidad mensual real."})
     if libre > 0:
         prioridades.append({"orden": 3, "clave": "ahorro", "titulo": "Automatizar ahorro", "detalle": "Separar una cantidad sostenible sin dejar la liquidez mensual en cero."})
