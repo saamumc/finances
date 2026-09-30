@@ -147,7 +147,7 @@ class MigracionV15(unittest.TestCase):
     def test_base_nueva_llega_a_v15(self) -> None:
         self.ruta.unlink()
         db.init_db()
-        self.assertEqual(self._versiones(), (15, "15"))
+        self.assertEqual(self._versiones(), (16, "16"))
         conn = sqlite3.connect(self.ruta)
         existentes = {n for (n,) in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
         conn.close()
