@@ -174,37 +174,40 @@ def fondo_emergencia(mes: str) -> dict[str, Any]:
 
 
 def proyectar_deuda(tarjeta_id: int, pago_adicional: int = 0) -> dict[str, Any]:
-    """Amortización mensual explicable. No modifica saldo ni registra un pago."""
+    """Proyecta una tarjeta usando el mismo motor determinista de deuda."""
+    from ..core.motor.deuda import proyectar_una_deuda
+
     tarjeta = next((t for t in calc.resumen_tarjetas() if t["id"] == tarjeta_id), None)
     if tarjeta is None:
         raise ValueError("Tarjeta no encontrada.")
     if pago_adicional < 0:
         raise ValueError("El pago adicional no puede ser negativo.")
-    saldo, tasa = tarjeta["saldo_deuda"], tarjeta["interes_mensual"] / 100
-    pago_base = min(max(tarjeta["pago_minimo"], 0), saldo) or 0
-    def recorrer(pago: int) -> tuple[int | None, int]:
-        pendiente, intereses, meses = saldo, 0, 0
-        # 600 meses evita presentar una proyección infinita si el pago ni
-        # siquiera cubre los intereses estimados.
-        while pendiente > 0 and meses < 600:
-            interes = round(pendiente * tasa)
-            abono = min(pago, pendiente + interes)
-            if abono <= interes and pendiente:
-                return None, intereses
-            intereses += interes; pendiente = max(pendiente + interes - abono, 0); meses += 1
-        return (meses if pendiente == 0 else None), intereses
-    meses_actual, interes_actual = recorrer(pago_base)
-    pago_mejorado = min(saldo + round(saldo * tasa), pago_base + pago_adicional)
-    meses_mejorado, interes_mejorado = recorrer(pago_mejorado)
-    return {"tarjeta_id": tarjeta_id, "tarjeta": tarjeta["nombre"], "saldo": saldo, "tasa_mensual": tarjeta["interes_mensual"],
-            "pago_minimo": pago_base, "pago_adicional": pago_adicional, "pago_mejorado": pago_mejorado,
-            "meses_actual": meses_actual, "meses_mejorado": meses_mejorado,
-            "meses_ahorrados": max((meses_actual or 0) - (meses_mejorado or 0), 0) if meses_actual else None,
-            "interes_actual_estimado": interes_actual, "interes_mejorado_estimado": interes_mejorado,
-            "interes_ahorrado_estimado": max(interes_actual - interes_mejorado, 0),
-            "confianza": "Media" if tarjeta["interes_mensual"] and pago_base else "Baja",
-            "nota": "Estimación con saldo, tasa mensual y pago mínimo registrados. No incluye nuevas compras, seguros, cuotas bancarias ni cambios de tasa."}
 
+    saldo = int(tarjeta["saldo_deuda"])
+    tasa = calc.Decimal(str(tarjeta["interes_mensual"])) / calc.Decimal("100")
+    pago_base = min(max(int(tarjeta["pago_minimo"]), 0), saldo)
+    pago_mejorado = min(saldo + calc.interes_cop(saldo, tasa), pago_base + int(pago_adicional))
+
+    meses_actual, interes_actual = proyectar_una_deuda(saldo, tasa, pago_base)
+    meses_mejorado, interes_mejorado = proyectar_una_deuda(saldo, tasa, pago_mejorado)
+
+    return {
+        "tarjeta_id": tarjeta_id,
+        "tarjeta": tarjeta["nombre"],
+        "saldo": saldo,
+        "tasa_mensual": tarjeta["interes_mensual"],
+        "pago_minimo": pago_base,
+        "pago_adicional": int(pago_adicional),
+        "pago_mejorado": pago_mejorado,
+        "meses_actual": meses_actual,
+        "meses_mejorado": meses_mejorado,
+        "meses_ahorrados": max((meses_actual or 0) - (meses_mejorado or 0), 0) if meses_actual else None,
+        "interes_actual_estimado": interes_actual,
+        "interes_mejorado_estimado": interes_mejorado,
+        "interes_ahorrado_estimado": max(interes_actual - interes_mejorado, 0),
+        "confianza": "Media" if tarjeta["interes_mensual"] and pago_base else "Baja",
+        "nota": "Estimación con saldo, tasa mensual y pago mínimo registrados. No incluye nuevas compras, seguros, cuotas bancarias ni cambios de tasa.",
+    }
 
 def calendario_financiero(mes: str) -> list[dict[str, Any]]:
     eventos: list[dict[str, Any]] = []
