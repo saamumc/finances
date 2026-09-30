@@ -1940,7 +1940,19 @@ class FinanzasApp(ctk.CTk):
         asignacion=estado.get("asignacion_margen",{})
         sugerida=asignacion.get("asignacion_sugerida",{})
         ctk.CTkLabel(op,text=f'Margen asignado: mínimos {dinero(sugerida.get("minimos_deuda",0))} · extra deuda {dinero(sugerida.get("extra_deuda",0))} · emergencia {dinero(sugerida.get("emergencia",0))} · inversión {dinero(sugerida.get("inversion",0))}',
-                     text_color=T.MUTED,wraplength=820,justify="left").pack(anchor="w",padx=18,pady=(3,16))
+                     text_color=T.MUTED,wraplength=820,justify="left").pack(anchor="w",padx=18,pady=(3,8))
+        radar=estado.get("radar_financiero",{})
+        ctk.CTkLabel(op,text="RADAR DEL MES",font=ui.fuente(10,"bold"),text_color=T.MUTED).pack(anchor="w",padx=18,pady=(4,5))
+        fila_radar=ui.fila(op); fila_radar.pack(fill="x",padx=18,pady=(0,7))
+        for señal in radar.get("señales",[]):
+            tono=T.OK if señal["estado"]=="ok" else T.WARN if señal["estado"]=="atencion" else T.DANGER
+            celda=ctk.CTkFrame(fila_radar,fg_color=T.SUNKEN,corner_radius=Espacio.RADIO_SM)
+            celda.pack(side="left",fill="both",expand=True,padx=(0,6))
+            ctk.CTkLabel(celda,text=señal["titulo"],font=ui.fuente(9,"bold"),text_color=T.MUTED).pack(anchor="w",padx=10,pady=(8,1))
+            ctk.CTkLabel(celda,text=señal["valor"],font=ui.fuente(11,"bold"),text_color=tono).pack(anchor="w",padx=10)
+            ctk.CTkLabel(celda,text=señal["detalle"],font=ui.fuente(9),text_color=T.FAINT,wraplength=150,justify="left").pack(anchor="w",padx=10,pady=(1,8))
+        ctk.CTkLabel(op,text=f'→ Próxima acción: {radar.get("proxima_accion","Revisar el mes.")}',
+                     font=ui.fuente(10,"bold"),text_color=T.TXT,wraplength=820,justify="left").pack(anchor="w",padx=18,pady=(2,14))
         emerg=self._panel(7,0,2)
         ctk.CTkLabel(emerg,text="FONDO DE EMERGENCIA",font=ui.fuente(11,"bold"),text_color=T.MUTED).pack(anchor="w",padx=18,pady=(16,5))
         e=estado["emergencia"]
