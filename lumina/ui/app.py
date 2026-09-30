@@ -1949,7 +1949,7 @@ class FinanzasApp(ctk.CTk):
         ctk.CTkLabel(op,text="RADAR DEL MES",font=ui.fuente(10,"bold"),text_color=T.MUTED).pack(anchor="w",padx=18,pady=(4,5))
         fila_radar=ui.fila(op); fila_radar.pack(fill="x",padx=18,pady=(0,7))
         for señal in radar.get("señales",[]):
-            tono=T.OK if señal["estado"]=="ok" else T.WARN if señal["estado"]=="atencion" else T.DANGER
+            tono=T.OK if señal["estado"]=="ok" else T.WARN if señal["estado"]=="atencion" else T.BAD
             celda=ctk.CTkFrame(fila_radar,fg_color=T.SUNKEN,corner_radius=Espacio.RADIO_SM)
             celda.pack(side="left",fill="both",expand=True,padx=(0,6))
             ctk.CTkLabel(celda,text=señal["titulo"],font=ui.fuente(9,"bold"),text_color=T.MUTED).pack(anchor="w",padx=10,pady=(8,1))
