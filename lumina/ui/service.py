@@ -15,7 +15,82 @@ from typing import Any
 
 from ..core import calculations as calc
 from ..core import database as db
-from ..advisor import service as advisor
+from ..advisor import intelligence as _advisor_intelligence
+
+class _AdvisorFacade:
+    """Adaptador de compatibilidad para la interfaz histórica de la UI."""
+
+    def __getattr__(self, name: str):
+        return getattr(_advisor_intelligence, name)
+
+    def presupuesto_seguro(self, mes: str, margen_porcentaje: int = 10) -> dict[str, Any]:
+        return _advisor_intelligence.capacidad_discrecional(
+            mes, margen_porcentaje=int(margen_porcentaje)
+        )
+
+    def analizar_finanzas(self, mes: str) -> dict[str, Any]:
+        return _advisor_intelligence.estado_actual(mes)
+
+    def evaluar_gasto(self, mes: str, monto: int, *, metodo: str = "efectivo",
+                      tarjeta_id: int | None = None, margen_porcentaje: int = 10) -> dict[str, Any]:
+        return _advisor_intelligence.evaluar_asequibilidad(
+            mes, monto, concepto="esta salida", margen_porcentaje=int(margen_porcentaje)
+        )
+
+    def responder_compra_inteligente(self, monto: int, concepto: str, urgencia: str, *,
+                                     mes: str, persona_pregunta: str, responsabilidad: str,
+                                     usar_tarjeta: int | None = None) -> dict[str, Any]:
+        pregunta = (
+            f"Evalúa una compra de {monto} COP para {concepto}. "
+            f"Urgencia: {urgencia}. Tarjeta: {usar_tarjeta or 'no'}. "
+            f"Responsabilidad: {responsabilidad}. Persona: {persona_pregunta}."
+        )
+        return _advisor_intelligence.responder(mes, pregunta, monto=monto)
+
+    def simular_escenario(self, mes: str, tipo: str, monto: int,
+                          *, tarjeta_id: int | None = None) -> dict[str, Any]:
+        return _advisor_intelligence.simular_escenario_detallado(
+            mes, tipo, monto, tarjeta_id=tarjeta_id
+        )
+
+    def proyectar_deuda(self, tarjeta_id: int, extra: int) -> dict[str, Any]:
+        return _advisor_intelligence.responder(
+            mes_actual(),
+            "Proyecta la deuda de mis tarjetas y cómo terminar de pagarla.",
+            monto=extra if extra > 0 else None,
+        )
+
+    def responder_pregunta(self, mes: str, pregunta: str, *,
+                           monto: int | None = None) -> dict[str, Any]:
+        return _advisor_intelligence.responder(mes, pregunta, monto=monto)
+
+    def estado_financiero(self, mes: str) -> dict[str, Any]:
+        return _advisor_intelligence.estado_actual(mes)
+
+    def hallazgos(self, mes: str) -> list[dict[str, Any]]:
+        return _advisor_intelligence.generar_hallazgos(mes)
+
+    def anomalias(self, mes: str) -> list[dict[str, Any]]:
+        return _advisor_intelligence.detectar_anomalias(mes)
+
+    def podria_ser_gasto_fijo(self, descripcion: str, *, monto: int | None = None,
+                              mes: str | None = None) -> dict[str, Any]:
+        return _advisor_intelligence.analizar_posible_gasto_fijo(
+            descripcion, monto=monto, mes=mes
+        )
+
+    def hallazgos_agrupados(self, mes: str) -> list[dict[str, Any]]:
+        return _advisor_intelligence.generar_hallazgos(mes)
+
+    def conversar(self, mes: str, pregunta: str, *, monto: int | None = None,
+                  sesion: Any = None) -> dict[str, Any]:
+        return _advisor_intelligence.responder(mes, pregunta, monto=monto, sesion=sesion)
+
+    def invalidar_contexto(self, mes: str | None = None) -> None:
+        _advisor_intelligence.invalidar_contexto(mes)
+
+
+advisor = _AdvisorFacade()
 from ..core import engine
 from ..constants import SAMUEL, SARA
 
