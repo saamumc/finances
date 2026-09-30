@@ -74,12 +74,19 @@ def _new_uuid() -> str:
 
 
 def backup_db() -> Path | None:
-    """Crea una copia antes de una migración; no modifica la base original."""
+    """Crea un backup SQLite consistente de la base antes de una migración."""
     if not DB_PATH.exists():
         return None
     stamp = dt.datetime.now().strftime("%Y%m%d%H%M%S")
     target = DB_PATH.with_name(f"{DB_PATH.stem}.backup.{stamp}{DB_PATH.suffix}")
-    shutil.copy2(DB_PATH, target)
+    source = sqlite3.connect(DB_PATH)
+    backup = sqlite3.connect(target)
+    try:
+        source.backup(backup)
+        backup.commit()
+    finally:
+        backup.close()
+        source.close()
     return target
 
 
@@ -2023,39 +2030,28 @@ def mostrar_advertencias_bd() -> None:
 
 
 def auto_migrar_si_necesario() -> bool:
-    """Si la BD existe pero es vieja, intenta migrar. Retorna True si migró."""
-    try:
-        with get_conn() as conn:
-            cursor = conn.cursor()
-            cursor.execute(
-                "SELECT name FROM sqlite_master WHERE type='table' AND name='config'"
+    """Migra la BD y deja que los errores críticos lleguen al arranque."""
+    with get_conn() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='config'")
+        if cursor.fetchone() is None:
+            conn.execute("CREATE TABLE config (key TEXT PRIMARY KEY, value TEXT)")
+        cursor.execute("SELECT value FROM config WHERE key='schema_version'")
+        actual = cursor.fetchone()
+        if actual is None or actual[0] != str(SCHEMA_VERSION):
+            print(f"[database.py]   Migrando BD a versión {SCHEMA_VERSION}...")
+            backup = backup_db()
+            if backup:
+                print(f"[database.py]   Backup: {backup}")
+            upgrade_db(conn)
+            conn.execute(
+                "INSERT OR REPLACE INTO config (key, value) VALUES (?, ?)",
+                ("schema_version", str(SCHEMA_VERSION)),
             )
-            if cursor.fetchone() is None:
-                print("[database.py] Creando tabla config...")
-                conn.execute("CREATE TABLE config (key TEXT PRIMARY KEY, value TEXT)")
-            
-            cursor.execute(
-                "SELECT value FROM config WHERE key='schema_version'"
-            )
-            actual = cursor.fetchone()
-            
-            if actual is None or actual[0] != str(SCHEMA_VERSION):
-                print(f"[database.py]   Migrando BD a versión {SCHEMA_VERSION}...")
-                backup_db()
-                upgrade_db(conn)  # migra de verdad; antes solo escribía el número
-                
-                # ACTUALIZAR LA VERSIÓN DEL ESQUEMA AL FINALIZAR
-                conn.execute(
-                    "INSERT OR REPLACE INTO config (key, value) VALUES (?, ?)",
-                    ("schema_version", str(SCHEMA_VERSION))
-                )
-                
-                print(f"[database.py]   Migración completada")
-                return True
-        return False
-    except Exception as e:
-        print(f"[database.py]    Error en migración: {e}")
-        return False
+            print("[database.py]   Migración completada")
+            return True
+    return False
+
 
 if __name__ == "__main__":
     print("Verificando integridad de BD...")
