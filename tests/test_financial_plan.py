@@ -48,6 +48,36 @@ class FinancialPlanTests(unittest.TestCase):
         self.assertEqual(r["otras_total"], 2_000_000)
         self.assertEqual(r["total"], 2_000_000)
 
+
+    def test_operacion_tarjetas_y_plan_mensual_cuadran(self):
+        cid = db.registrar_tarjeta(
+            "Visa", "persona1", 3_000_000, pago_minimo=100_000,
+            interes_mensual=2.0, saldo_inicial_historico=0,
+        )
+        db.registrar_gasto(
+            "2026-09", "Compra", "Hogar", 500_000, "2026-09-10",
+            "tarjeta", "persona1", "persona1", 500_000, 0,
+            tarjeta_id=cid,
+        )
+        db.registrar_pago_tarjeta(
+            "2026-09", "2026-09-20", cid, 100_000, "persona1", 100_000, 0,
+        )
+        r = financial_plan.resumen_tarjetas_operativo("2026-09")
+        self.assertEqual(r["deuda_total"], 400_000)
+        self.assertEqual(r["pago_minimo_total"], 100_000)
+        self.assertEqual(r["pagado_mes"], 100_000)
+        self.assertEqual(r["faltante_minimos"], 0)
+        p = financial_plan.plan_mensual_deuda("2026-09", 300_000)
+        self.assertTrue(p["cubre_minimos"])
+        self.assertEqual(p["extra_sobre_minimos"], 200_000)
+
+    def test_mapa_accion_no_modifica_la_bd(self):
+        antes = db.DB_PATH.read_bytes()
+        r = financial_plan.mapa_accion("2026-09", 100_000)
+        despues = db.DB_PATH.read_bytes()
+        self.assertEqual(antes, despues)
+        self.assertTrue(r["fases"])
+
     def test_plan_financiero_exhibe_modulos(self):
         r = financial_plan.financial_os("2026-09")
         for key in ("flujo", "liquidez", "patrimonio", "tarjetas", "ahorros",
