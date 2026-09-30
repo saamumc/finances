@@ -2020,7 +2020,7 @@ def verificar_bd_integridad() -> dict[str, Any]:
                 LEFT JOIN pagos_deuda p ON p.id=a.pago_id
                 WHERE c.estado='ACTIVO'
                 GROUP BY c.id
-                HAVING c.valor_pendiente + COALESCE(SUM(a.monto_asignado),0) != c.valor_original
+                HAVING c.valor_pendiente + COALESCE(SUM(CASE WHEN p.estado='ACTIVO' THEN a.monto_asignado ELSE 0 END),0) != c.valor_original
             """)]
 
             return {
