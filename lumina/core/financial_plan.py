@@ -24,6 +24,11 @@ def _money(value: Any) -> int:
     return max(0, int(value or 0))
 
 
+def dinero(value: Any) -> str:
+    """Formatea un monto COP para mensajes del Financial OS."""
+    return f"${_money(value):,}".replace(",", ".")
+
+
 def resumen_inversiones() -> dict[str, Any]:
     """Foto derivada de inversiones activas y sus movimientos."""
     with db.get_conn() as conn:
