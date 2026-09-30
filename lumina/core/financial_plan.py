@@ -312,6 +312,97 @@ def trayectoria_patrimonio(month: str, meses: int = 12) -> dict[str, Any]:
     return {"mes_referencia": month, "meses": rows, "variaciones": cambios,
             "nota": "La serie histórica solo muestra como patrimonio las magnitudes que pueden reconstruirse sin inventar saldos. Los meses anteriores al de referencia exponen flujo, liquidez y ahorro del período; el patrimonio actual se muestra únicamente en el mes consultado."}
 
+
+def resumen_tarjetas_operativo(month: str) -> dict[str, Any]:
+    """Resume la operación mensual de tarjetas sin modificar la base de datos.
+
+    El saldo es el saldo actual registrado por el motor. Los pagos y sus
+    aportes se filtran por mes para distinguir deuda pendiente de caja pagada.
+    """
+    tarjetas = calc.resumen_tarjetas(solo_activas=True)
+    pagos = db.get_pagos_deuda(mes=month)
+    pagos_por_tarjeta: dict[int, list[dict[str, Any]]] = {}
+    for pago in pagos:
+        tarjeta_id = pago.get("tarjeta_id")
+        if tarjeta_id is not None:
+            pagos_por_tarjeta.setdefault(int(tarjeta_id), []).append(pago)
+
+    detalle = []
+    deuda_total = pago_minimo_total = pagado_mes = 0
+    pagado_p1 = pagado_p2 = 0
+    intereses_estimados = 0
+    cupo_total = cupo_disponible = 0
+    for card in tarjetas:
+        saldo = _money(card.get("saldo_deuda"))
+        minimo = min(_money(card.get("pago_minimo")), saldo)
+        card_pagos = pagos_por_tarjeta.get(int(card["id"]), [])
+        pagado = sum(_money(p.get("monto")) for p in card_pagos)
+        aporte_p1 = sum(_money(p.get("monto_aportado_p1")) for p in card_pagos)
+        aporte_p2 = sum(_money(p.get("monto_aportado_p2")) for p in card_pagos)
+        faltante = max(0, minimo - pagado)
+        interes = _money(card.get("interes_estimado"))
+        intereses_estimados += interes
+        deuda_total += saldo
+        pago_minimo_total += minimo
+        pagado_mes += pagado
+        pagado_p1 += aporte_p1
+        pagado_p2 += aporte_p2
+        cupo_total += _money(card.get("cupo_total"))
+        cupo_disponible += _money(card.get("cupo_disponible"))
+        detalle.append({
+            "id": int(card["id"]),
+            "nombre": card.get("nombre"),
+            "dueño": card.get("titular"),
+            "titular": card.get("titular"),
+            "deuda": saldo,
+            "pago_minimo": minimo,
+            "pagado_mes": pagado,
+            "faltante_minimo": faltante,
+            "interes_mensual": card.get("interes_mensual", 0),
+            "interes_estimado": interes,
+            "cupo_total": _money(card.get("cupo_total")),
+            "cupo_disponible": _money(card.get("cupo_disponible")),
+            "utilizacion": float(card.get("utilizacion") or 0),
+            "pagado_persona1": aporte_p1,
+            "pagado_persona2": aporte_p2,
+        })
+    return {
+        "mes": month,
+        "deuda_total": deuda_total,
+        "pago_minimo_total": pago_minimo_total,
+        "pagado_mes": pagado_mes,
+        "faltante_minimos": max(0, pago_minimo_total - pagado_mes),
+        "pagado_persona1": pagado_p1,
+        "pagado_persona2": pagado_p2,
+        "intereses_estimados": intereses_estimados,
+        "cupo_total": cupo_total,
+        "cupo_disponible": cupo_disponible,
+        "utilizacion_global": (deuda_total / cupo_total) if cupo_total else 0.0,
+        "tarjetas": detalle,
+        "nota": "Lectura operativa del mes; no registra pagos, compras ni transferencias automáticamente.",
+    }
+
+
+def plan_mensual_deuda(month: str, disponible: int) -> dict[str, Any]:
+    """Distribuye de forma informativa el margen mensual entre mínimos y deuda."""
+    disponible = max(0, int(disponible))
+    tarjetas = resumen_tarjetas_operativo(month)
+    deudas = _deuda_integral_rows()
+    total_minimos = sum(int(item["minimo"]) for item in deudas)
+    cubre = disponible >= total_minimos
+    return {
+        "mes": month,
+        "disponible": disponible,
+        "total_minimos": total_minimos,
+        "extra_sobre_minimos": max(0, disponible - total_minimos),
+        "faltante_minimos": max(0, total_minimos - disponible),
+        "cubre_minimos": cubre,
+        "minimos_tarjetas": int(tarjetas["pago_minimo_total"]),
+        "minimos_otras_deudas": max(0, total_minimos - int(tarjetas["pago_minimo_total"])),
+        "deuda_total": int(sum(item["saldo"] for item in deudas)),
+        "nota": "Plan informativo: no ejecuta pagos. El extra se puede dirigir a la deuda prioritaria después de cubrir mínimos.",
+    }
+
 def asignacion_margen(month: str, margen: int | None = None) -> dict[str, Any]:
     """Propone un presupuesto de margen por fases sin ejecutar ninguna operación."""
     flujo = calc.flujo_caja_mes(month)
