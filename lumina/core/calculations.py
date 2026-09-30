@@ -287,7 +287,7 @@ def _deuda_compras_conocidas(tarjeta_id: int | None = None) -> dict[str, int]:
             raise IntegrityError(f"Compra de tarjeta inválida #{compra['id']}: pendiente fuera de rango.")
         # La regla del dominio conserva la proporción original. El residuo COP
         # se asigna a P2 para que las dos partes sumen exactamente el pendiente.
-        pendiente_p1 = round(pendiente * (compra["monto_p1"] / original))
+        pendiente_p1 = int((Decimal(pendiente) * Decimal(compra["monto_p1"]) / Decimal(original)).quantize(Decimal("1"), rounding=ROUND_HALF_UP))
         resultado[SAMUEL] += pendiente_p1
         resultado[SARA] += pendiente - pendiente_p1
     return resultado
