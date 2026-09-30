@@ -462,6 +462,69 @@ def mapa_accion(month: str, presupuesto: int | None = None) -> dict[str, Any]:
     }
 
 
+def radar_financiero(month: str) -> dict[str, Any]:
+    """Radar operativo del mes: convierte la foto financiera en señales y una próxima acción.
+    Es solo lectura. No modifica SQLite ni inventa datos faltantes.
+    """
+    flujo = calc.flujo_caja_mes(month)
+    tarjetas = resumen_tarjetas_operativo(month)
+    deudas = resumen_deudas()
+    emergencia = fondo_emergencia(month)
+    inversiones = resumen_inversiones()
+    libre = max(0, int(flujo.get("ahorro", 0)))
+    ingresos = max(0, int(flujo.get("ingresos", 0)))
+    cupo = sum(int(x.get("cupo_total", 0)) for x in calc.resumen_tarjetas(solo_activas=True))
+    deuda_tarjetas = int(tarjetas.get("deuda_total", 0))
+    utilizacion = deuda_tarjetas / cupo if cupo > 0 else 0.0
+    señales: list[dict[str, Any]] = []
+    faltante = int(tarjetas.get("faltante_minimos", 0))
+    if faltante > 0:
+        señales.append({"clave":"minimos","estado":"alerta","titulo":"Mínimos de tarjetas","valor":dinero(faltante),
+            "detalle":"Hay pagos mínimos registrados que todavía no están cubiertos.",
+            "accion":"Cubrir los mínimos antes de enviar dinero extra a otras metas."})
+    elif deuda_tarjetas > 0:
+        señales.append({"clave":"minimos","estado":"ok","titulo":"Mínimos de tarjetas","valor":"cubiertos",
+            "detalle":f"Pagado este mes: {dinero(tarjetas.get('pagado_mes', 0))}.",
+            "accion":"El siguiente margen puede dirigirse a la deuda prioritaria."})
+    else:
+        señales.append({"clave":"minimos","estado":"ok","titulo":"Mínimos de tarjetas","valor":"sin deuda",
+            "detalle":"No hay deuda activa de tarjetas registrada.",
+            "accion":"Conservar el margen para emergencia, ahorro o patrimonio."})
+    if utilizacion >= 0.80:
+        uso_estado, uso_accion = "alerta", "Evitar aumentar el saldo si no es necesario y priorizar reducción."
+    elif utilizacion >= 0.50:
+        uso_estado, uso_accion = "atencion", "Vigilar compras nuevas y mantener la reducción de saldo."
+    else:
+        uso_estado, uso_accion = "ok", "Mantener el nivel de utilización bajo control."
+    señales.append({"clave":"utilizacion","estado":uso_estado,"titulo":"Uso de tarjetas",
+        "valor":f"{utilizacion:.0%}" if cupo else "—",
+        "detalle":f"Utilización aproximada: {utilizacion:.0%} del cupo." if cupo else "No hay cupo registrado.",
+        "accion":uso_accion})
+    cobertura = float(emergencia.get("cobertura_meses", 0) or 0)
+    faltante_em = int(emergencia.get("faltante_base", 0) or 0)
+    señales.append({"clave":"emergencia","estado":("alerta" if cobertura < 1 else "atencion") if faltante_em else "ok",
+        "titulo":"Fondo de emergencia","valor":f"{cobertura:.1f} meses",
+        "detalle":f"Faltan {dinero(faltante_em)} para la meta base." if faltante_em else "La meta base registrada está cubierta.",
+        "accion":"Reservar parte del margen mensual hasta alcanzar la meta base." if faltante_em else "Conservar la reserva y dirigir excedentes a objetivos posteriores."})
+    tasa_ahorro = libre / ingresos if ingresos > 0 else 0
+    señales.append({"clave":"margen","estado":"ok" if ingresos and tasa_ahorro >= .15 else "atencion" if ingresos and tasa_ahorro > 0 else "alerta",
+        "titulo":"Margen mensual","valor":dinero(libre),
+        "detalle":f"Margen del mes: {dinero(libre)} ({tasa_ahorro:.0%} de los ingresos registrados)." if ingresos else "No hay ingresos registrados para medir el margen del mes.",
+        "accion":"Revisar gastos antes de comprometer el margen restante."})
+    if deudas["total"] > 0:
+        prioridad_valor, prioridad_accion, prioridad_estado = "Reducir deuda", "Después de cubrir mínimos, concentrar el extra en una sola deuda según la estrategia elegida.", "atencion"
+    elif inversiones["total"] > 0:
+        prioridad_valor, prioridad_accion, prioridad_estado = "Construir patrimonio", "Mantener aportes sostenibles y revisar la asignación periódicamente.", "ok"
+    else:
+        prioridad_valor, prioridad_accion, prioridad_estado = "Preparar el siguiente paso", "Usar el margen para fortalecer emergencia, ahorro y luego inversión.", "ok"
+    señales.append({"clave":"prioridad","estado":prioridad_estado,"titulo":"Prioridad actual","valor":prioridad_valor,
+        "detalle":"Lectura combinada de obligaciones y patrimonio registrados.","accion":prioridad_accion})
+    prioridad = next((x for x in señales if x["estado"]=="alerta"), None) or next((x for x in señales if x["estado"]=="atencion"), None) or señales[-1]
+    return {"mes":month,"señales":señales,"proxima_accion":prioridad["accion"],
+        "proxima_accion_clave":prioridad["clave"],"resumen":f"{prioridad['titulo']}: {prioridad['valor']}.",
+        "nota":"Radar derivado de movimientos y configuraciones registradas; es orientativo y no ejecuta pagos."}
+
+
 def financial_os(month: str, presupuesto_deuda: int | None = None) -> dict[str, Any]:
     """Mapa completo: situación -> prioridades -> deuda -> emergencia -> ahorro -> inversión -> patrimonio."""
     estado = {
@@ -496,6 +559,7 @@ def financial_os(month: str, presupuesto_deuda: int | None = None) -> dict[str, 
     prioridades.append({"orden": 4, "clave": "inversion", "titulo": "Construir patrimonio", "detalle": "Cuando la liquidez y las obligaciones estén cubiertas, modelar aportes de inversión."})
     estado["prioridades"] = prioridades
     estado["mapa_accion"] = mapa_accion(month, presupuesto)
+    estado["radar_financiero"] = radar_financiero(month)
     estado["resumen"] = {
         "dinero_libre": libre,
         "deuda_total": estado["deudas"]["total"],
