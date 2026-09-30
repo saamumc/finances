@@ -424,6 +424,44 @@ def readiness(month: str) -> dict[str, Any]:
     }
 
 
+def mapa_accion(month: str, presupuesto: int | None = None) -> dict[str, Any]:
+    """Resume la siguiente fase financiera sin volver a invocar financial_os."""
+    flujo = calc.flujo_caja_mes(month)
+    libre = max(0, int(flujo.get("ahorro", 0))) if presupuesto is None else max(0, int(presupuesto))
+    deudas = resumen_deudas()
+    emergencia = fondo_emergencia(month)
+    inversiones = resumen_inversiones()
+    ahorros = calc.resumen_ahorros()
+    fases = []
+    if libre <= 0:
+        fases.append({"fase": 1, "clave": "flujo", "estado": "bloqueado",
+                      "accion": "Crear margen mensual positivo antes de aumentar obligaciones o inversiones."})
+    elif deudas["total"] > 0:
+        fases.append({"fase": 1, "clave": "deuda", "estado": "activa",
+                      "accion": "Cubrir mínimos y dirigir el excedente a una estrategia de amortización."})
+    elif emergencia["faltante_base"] > 0:
+        fases.append({"fase": 1, "clave": "emergencia", "estado": "activa",
+                      "accion": "Completar el fondo de emergencia base antes de aumentar riesgo."})
+    else:
+        fases.append({"fase": 1, "clave": "patrimonio", "estado": "activa",
+                      "accion": "Asignar el margen sostenible entre metas e inversión según horizonte y liquidez."})
+    if emergencia["faltante_base"] > 0:
+        fases.append({"fase": 2, "clave": "emergencia", "estado": "pendiente",
+                      "faltante": int(emergencia["faltante_base"])})
+    if int(ahorros.get("total", 0)) > 0:
+        fases.append({"fase": 3, "clave": "ahorro", "estado": "registrado",
+                      "saldo": int(ahorros["total"])})
+    fases.append({"fase": 4, "clave": "inversion",
+                  "estado": "registrado" if inversiones["total"] > 0 else "pendiente",
+                  "saldo": int(inversiones["total"])})
+    return {
+        "mes": month, "margen_mensual": libre, "deuda_total": int(deudas["total"]),
+        "fondo_emergencia_actual": int(emergencia["actual"]),
+        "inversion_actual": int(inversiones["total"]), "fases": fases,
+        "nota": "Mapa informativo: no ejecuta pagos, transferencias ni inversiones."
+    }
+
+
 def financial_os(month: str, presupuesto_deuda: int | None = None) -> dict[str, Any]:
     """Mapa completo: situación -> prioridades -> deuda -> emergencia -> ahorro -> inversión -> patrimonio."""
     estado = {
