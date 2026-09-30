@@ -208,7 +208,7 @@ def unified_debt_payoff(monthly_budget: int, strategy: str = "avalancha", *, sta
         "minimums": resultado["minimos"],
         "cards": cards,
         "viable": resultado["viable"],
-        "confidence": "Media" if all(x["tasa_mensual"] > 0 for x in filas) else "Baja",
+        "confidence": "Media" if filas and all(x["tasa_mensual"] > 0 for x in filas) else "Baja",
         "note": resultado.get("nota", ""),
     }
 
