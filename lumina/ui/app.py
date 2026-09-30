@@ -1990,6 +1990,23 @@ class FinanzasApp(ctk.CTk):
         ctk.CTkLabel(ready_panel,text=f'Margen mensual {dinero(ready.get("margen_mensual",0))} · ahorro acumulado {dinero(ready.get("ahorro_acumulado",0))}',text_color=T.TXT,wraplength=390,justify="left").pack(anchor="w",padx=18,pady=(0,4))
         ctk.CTkLabel(ready_panel,text=" · ".join(ready.get("razones",[])) or "No hay bloqueos registrados.",text_color=T.MUTED,wraplength=390,justify="left").pack(anchor="w",padx=18,pady=(0,16))
 
+        patrimonio_panel=self._panel(10,0,4)
+        ctk.CTkLabel(patrimonio_panel,text="PATRIMONIO",font=ui.fuente(11,"bold"),text_color=T.MUTED).pack(anchor="w",padx=18,pady=(16,5))
+        patrimonio=estado.get("patrimonio",{})
+        ctk.CTkLabel(patrimonio_panel,text=f'Patrimonio neto: {dinero(patrimonio.get("patrimonio_neto",patrimonio.get("neto",0)))} · activos: {dinero(patrimonio.get("activos",0))} · obligaciones: {dinero(patrimonio.get("obligaciones",0))}',text_color=T.TXT,wraplength=820,justify="left").pack(anchor="w",padx=18,pady=(0,5))
+        ctk.CTkLabel(patrimonio_panel,text=f'Liquidez: {dinero(estado.get("liquidez",{}).get("total",0))} · ahorro: {dinero(estado.get("ahorros",{}).get("total",0))} · inversión: {dinero(estado.get("inversiones",{}).get("total",0))}',text_color=T.MUTED,wraplength=820,justify="left").pack(anchor="w",padx=18,pady=(0,14))
+
+        historial=self._panel(11,0,4)
+        ctk.CTkLabel(historial,text="TRAYECTORIA PATRIMONIAL",font=ui.fuente(11,"bold"),text_color=T.MUTED).pack(anchor="w",padx=18,pady=(16,5))
+        trayectoria=estado.get("trayectoria_patrimonio",[])
+        if trayectoria:
+            puntos=trayectoria[-3:]
+            texto=" · ".join(f'{x.get("mes","")} {dinero(x.get("patrimonio_neto",x.get("neto",0)))}' for x in puntos)
+            ctk.CTkLabel(historial,text=texto,text_color=T.TXT,wraplength=820,justify="left").pack(anchor="w",padx=18,pady=(0,4))
+            ctk.CTkLabel(historial,text="Lectura compacta de la evolución patrimonial registrada.",text_color=T.FAINT,wraplength=820,justify="left").pack(anchor="w",padx=18,pady=(0,14))
+        else:
+            ctk.CTkLabel(historial,text="Todavía no hay suficientes movimientos para formar una trayectoria.",text_color=T.MUTED).pack(anchor="w",padx=18,pady=(0,14))
+
     def show_settings(self)->None:
         """Preferencias locales. Aquí no se modifica ningún dato financiero."""
         self._clear("Ajustes","Ajustes")
