@@ -238,6 +238,7 @@ def readiness(month: str) -> dict[str, Any]:
         "listo_para_invertir": listo,
         "nivel": "base" if listo else "construccion",
         "margen_mensual": libre,
+        "ahorro_acumulado": ahorro_total,
         "deuda_total": deuda["total"],
         "fondo_emergencia": emergencia,
         "inversiones": inversiones,
