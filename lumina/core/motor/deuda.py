@@ -106,7 +106,7 @@ def simular_cascada(
     free_date = None
     if viable:
         year, month = (int(x) for x in base_month.split("-"))
-        index = year * 12 + month - 1 + months
+        index = year * 12 + month - 1 + max(months - 1, 0)
         year, month = divmod(index, 12)
         free_date = f"{year:04d}-{month + 1:02d}"
 
