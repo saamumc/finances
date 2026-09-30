@@ -259,7 +259,7 @@ def financial_os(month: str, presupuesto_deuda: int | None = None) -> dict[str, 
         "inversiones": resumen_inversiones(),
         "emergencia": fondo_emergencia(month),
     }
-    libre = max(0, int(estado["patrimonio"].get("disponible_gastos_recurrentes", 0)))
+    libre = max(0, int(estado["flujo"].get("ahorro", 0)))
     presupuesto = max(0, int(presupuesto_deuda if presupuesto_deuda is not None else libre))
     estado["plan_deuda"] = plan_deuda(presupuesto)
     estado["preparacion_inversion"] = readiness(month)
