@@ -810,13 +810,32 @@ def patrimonio_liquido(mes: str | None = None) -> dict[str, int]:
 
 
 def resumen_presupuestos(mes: str) -> dict[str, Any]:
+    """Resumen determinista de presupuesto mensual, sin floats para dinero."""
+    mes = db.validar_mes(mes)
     filas = db.get_presupuestos(mes)
+    total_presupuestado = 0
+    total_gastado = 0
     for fila in filas:
-        fila["restante"] = fila["monto"] - fila["gastado"]
-        fila["uso"] = fila["gastado"] / fila["monto"] if fila["monto"] else 0.0
+        monto = int(fila["monto"])
+        gastado = int(fila["gastado"])
+        restante = monto - gastado
+        uso = (
+            (Decimal(gastado) / Decimal(monto)).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
+            if monto else Decimal("0")
+        )
+        fila["monto"] = monto
+        fila["gastado"] = gastado
+        fila["restante"] = restante
+        fila["excedido"] = restante < 0
+        fila["uso"] = float(uso)
+        fila["uso_pct"] = int((uso * Decimal("100")).quantize(Decimal("1"), rounding=ROUND_HALF_UP))
+        total_presupuestado += monto
+        total_gastado += gastado
     return {"mes": mes, "presupuestos": filas,
-            "total_presupuestado": sum(f["monto"] for f in filas),
-            "total_gastado": sum(f["gastado"] for f in filas)}
+            "total_presupuestado": total_presupuestado,
+            "total_gastado": total_gastado,
+            "total_restante": total_presupuestado - total_gastado,
+            "categorias_excedidas": sum(1 for f in filas if f["excedido"])}
 
 
 def capacidad_ahorro_estimada(mes: str) -> int:
