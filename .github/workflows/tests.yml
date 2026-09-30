@@ -23,4 +23,12 @@ jobs:
       - name: Install dependencies
         run: python -m pip install -r requirements.txt
       - name: Run complete unittest suite
-        run: python -m unittest discover -s tests -p "test_*.py" -v
+        run: |
+          set -o pipefail
+          python -m unittest discover -s tests -p "test_*.py" -v 2>&1 | tee test-output.txt
+      - name: Upload test output
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: unittest-output
+          path: test-output.txt
