@@ -516,6 +516,10 @@ class FinanceService:
                 payload[key] = parsear_dinero(payload[key])
         return financial_plan.registrar_deuda(**payload)
 
+    def radar_financiero(self, mes: str) -> dict[str, Any]:
+        from ..core import financial_plan
+        return financial_plan.radar_financiero(mes)
+
     def plan_deuda_integral(self, mensual_disponible: Any) -> dict[str, Any]:
         from ..core import financial_plan
         return financial_plan.plan_deuda_integral(parsear_dinero(mensual_disponible))
