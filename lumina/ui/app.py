@@ -1927,8 +1927,8 @@ class FinanzasApp(ctk.CTk):
         ctk.CTkLabel(deuda,text="SALIDA DE DEUDAS",font=ui.fuente(11,"bold"),text_color=T.MUTED).pack(anchor="w",padx=18,pady=(16,5))
         p=estado["plan_deuda"]["avalancha"]; s=estado["plan_deuda"]["bola_de_nieve"]
         ctk.CTkLabel(deuda,text=f'Presupuesto mensual: {dinero(estado["plan_deuda"]["presupuesto_mensual"])}',text_color=T.TXT).pack(anchor="w",padx=18)
-        ctk.CTkLabel(deuda,text=f'Avalancha: {p.get("meses",p.get("months",0))} meses · interés proyectado {dinero(p.get("intereses_proyectados",p.get("total_interest",0)))}' if p["months"] else p["note"],text_color=T.TXT).pack(anchor="w",padx=18,pady=5)
-        ctk.CTkLabel(deuda,text=f'Bola de nieve: {s.get("meses",s.get("months",0))} meses · interés proyectado {dinero(s.get("intereses_proyectados",s.get("total_interest",0)))}' if s["months"] else s["note"],text_color=T.MUTED).pack(anchor="w",padx=18,pady=(0,14))
+        ctk.CTkLabel(deuda,text=f'Avalancha: {p.get("meses",p.get("months",0))} meses · interés proyectado {dinero(p.get("intereses_proyectados",p.get("total_interest",0)))}' if p.get("meses",p.get("months",0)) else p["note"],text_color=T.TXT).pack(anchor="w",padx=18,pady=5)
+        ctk.CTkLabel(deuda,text=f'Bola de nieve: {s.get("meses",s.get("months",0))} meses · interés proyectado {dinero(s.get("intereses_proyectados",s.get("total_interest",0)))}' if s.get("meses",s.get("months",0)) else s["note"],text_color=T.MUTED).pack(anchor="w",padx=18,pady=(0,14))
         op=self._panel(6,0,4)
         ctk.CTkLabel(op,text="CONTROL OPERATIVO",font=ui.fuente(11,"bold"),text_color=T.MUTED).pack(anchor="w",padx=18,pady=(16,6))
         tarjetas_op=estado.get("tarjetas_operativo",{})
@@ -1963,6 +1963,32 @@ class FinanzasApp(ctk.CTk):
         iv=estado["inversiones"]
         ctk.CTkLabel(inv,text=dinero(iv["total"]),font=Tipo.numero(),text_color=T.PRIMARY).pack(anchor="w",padx=18,pady=5)
         ctk.CTkLabel(inv,text=f'{iv["cantidad"]} inversión(es) · aportes {dinero(iv["aportes"])} · variación registrada {dinero(iv["valoraciones"])}',text_color=T.TXT,wraplength=390,justify="left").pack(anchor="w",padx=18,pady=(0,16))
+
+        decisiones=self._panel(8,0,4)
+        ctk.CTkLabel(decisiones,text="DECISIONES DEL MES",font=ui.fuente(11,"bold"),text_color=T.MUTED).pack(anchor="w",padx=18,pady=(16,6))
+        mensual=estado.get("plan_mensual_deuda",{})
+        alloc=estado.get("asignacion_margen",{}).get("asignacion_sugerida",{})
+        ctk.CTkLabel(decisiones,text=f'Capacidad para deuda: {dinero(mensual.get("disponible",0))} · mínimos: {dinero(mensual.get("total_minimos",0))} · extra: {dinero(mensual.get("extra_sobre_minimos",0))}',text_color=T.TXT,wraplength=820,justify="left").pack(anchor="w",padx=18,pady=3)
+        ctk.CTkLabel(decisiones,text=f'Propuesta: deuda {dinero(alloc.get("extra_deuda",0))} · emergencia {dinero(alloc.get("emergencia",0))} · inversión {dinero(alloc.get("inversion",0))}',text_color=T.MUTED,wraplength=820,justify="left").pack(anchor="w",padx=18,pady=3)
+        fases=estado.get("mapa_accion",{}).get("fases",[])
+        activa=fases[0] if fases else {}
+        ctk.CTkLabel(decisiones,text=f'FASE ACTIVA · {str(activa.get("clave","sin datos")).upper()}',font=ui.fuente(10,"bold"),text_color=T.PRIMARY).pack(anchor="w",padx=18,pady=(6,1))
+        ctk.CTkLabel(decisiones,text=activa.get("accion","Revisar el radar del mes."),text_color=T.TXT,wraplength=820,justify="left").pack(anchor="w",padx=18,pady=(0,14))
+
+        futuro=self._panel(9,0,2)
+        ctk.CTkLabel(futuro,text="PROYECCIÓN",font=ui.fuente(11,"bold"),text_color=T.MUTED).pack(anchor="w",padx=18,pady=(16,5))
+        proy=estado.get("proyeccion",{})
+        ctk.CTkLabel(futuro,text=dinero(proy.get("valor_proyectado",0)),font=Tipo.numero(),text_color=T.PRIMARY).pack(anchor="w",padx=18,pady=4)
+        ctk.CTkLabel(futuro,text=f'En {proy.get("meses",60)} meses · aportado {dinero(proy.get("aportado",0))} · ganancia modelada {dinero(proy.get("ganancia_proyectada",0))}',text_color=T.TXT,wraplength=390,justify="left").pack(anchor="w",padx=18,pady=(0,4))
+        ctk.CTkLabel(futuro,text="Escenario matemático a tasa 0%; no representa un rendimiento garantizado.",text_color=T.FAINT,wraplength=390,justify="left").pack(anchor="w",padx=18,pady=(0,16))
+
+        ready_panel=self._panel(9,2,2)
+        ctk.CTkLabel(ready_panel,text="PREPARACIÓN PARA INVERTIR",font=ui.fuente(11,"bold"),text_color=T.MUTED).pack(anchor="w",padx=18,pady=(16,5))
+        ready=estado.get("preparacion_inversion",{})
+        listo=bool(ready.get("listo_para_invertir"))
+        ctk.CTkLabel(ready_panel,text="LISTO" if listo else "EN CONSTRUCCIÓN",font=Tipo.numero(),text_color=T.OK if listo else T.WARN).pack(anchor="w",padx=18,pady=4)
+        ctk.CTkLabel(ready_panel,text=f'Margen mensual {dinero(ready.get("margen_mensual",0))} · ahorro acumulado {dinero(ready.get("ahorro_acumulado",0))}',text_color=T.TXT,wraplength=390,justify="left").pack(anchor="w",padx=18,pady=(0,4))
+        ctk.CTkLabel(ready_panel,text=" · ".join(ready.get("razones",[])) or "No hay bloqueos registrados.",text_color=T.MUTED,wraplength=390,justify="left").pack(anchor="w",padx=18,pady=(0,16))
 
     def show_settings(self)->None:
         """Preferencias locales. Aquí no se modifica ningún dato financiero."""
