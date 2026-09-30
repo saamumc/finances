@@ -511,6 +511,10 @@ class FinanceService:
         from ..core import financial_plan
         financial_plan.desactivar_inversion(int(inversion_id))
 
+    def reversar_movimiento_inversion(self, movimiento_id: int, motivo: str) -> None:
+        from ..core import financial_plan
+        financial_plan.reversar_movimiento_inversion(int(movimiento_id), motivo)
+
     def registrar_deuda(self, datos: dict[str, Any]) -> int:
         from ..core import financial_plan
         payload = dict(datos)
