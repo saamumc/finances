@@ -1929,12 +1929,24 @@ class FinanzasApp(ctk.CTk):
         ctk.CTkLabel(deuda,text=f'Presupuesto mensual: {dinero(estado["plan_deuda"]["presupuesto_mensual"])}',text_color=T.TXT).pack(anchor="w",padx=18)
         ctk.CTkLabel(deuda,text=f'Avalancha: {p["months"]} meses · interés proyectado {dinero(p["total_interest"])}' if p["months"] else p["note"],text_color=T.TXT).pack(anchor="w",padx=18,pady=5)
         ctk.CTkLabel(deuda,text=f'Bola de nieve: {s["months"]} meses · interés proyectado {dinero(s["total_interest"])}' if s["months"] else s["note"],text_color=T.MUTED).pack(anchor="w",padx=18,pady=(0,14))
-        emerg=self._panel(6,0,2)
+        op=self._panel(6,0,4)
+        ctk.CTkLabel(op,text="CONTROL OPERATIVO",font=ui.fuente(11,"bold"),text_color=T.MUTED).pack(anchor="w",padx=18,pady=(16,6))
+        tarjetas_op=estado.get("tarjetas_operativo",{})
+        ctk.CTkLabel(op,text=f'Tarjetas: {dinero(tarjetas_op.get("deuda_total",0))} de deuda · mínimos {dinero(tarjetas_op.get("pago_minimo_total",0))} · pagado este mes {dinero(tarjetas_op.get("pagado_mes",0))}',
+                     text_color=T.TXT,wraplength=820,justify="left").pack(anchor="w",padx=18,pady=3)
+        faltante=tarjetas_op.get("faltante_minimos",0)
+        ctk.CTkLabel(op,text=(f'⚠ Faltan {dinero(faltante)} para cubrir mínimos registrados.' if faltante else "✓ Los mínimos registrados de tarjetas están cubiertos."),
+                     text_color=T.WARN if faltante else T.OK).pack(anchor="w",padx=18,pady=3)
+        asignacion=estado.get("asignacion_margen",{})
+        sugerida=asignacion.get("asignacion_sugerida",{})
+        ctk.CTkLabel(op,text=f'Margen asignado: mínimos {dinero(sugerida.get("minimos_deuda",0))} · extra deuda {dinero(sugerida.get("extra_deuda",0))} · emergencia {dinero(sugerida.get("emergencia",0))} · inversión {dinero(sugerida.get("inversion",0))}',
+                     text_color=T.MUTED,wraplength=820,justify="left").pack(anchor="w",padx=18,pady=(3,16))
+        emerg=self._panel(7,0,2)
         ctk.CTkLabel(emerg,text="FONDO DE EMERGENCIA",font=ui.fuente(11,"bold"),text_color=T.MUTED).pack(anchor="w",padx=18,pady=(16,5))
         e=estado["emergencia"]
         ctk.CTkLabel(emerg,text=f'Actual: {dinero(e["actual"])} · {e["cobertura_meses"]:.1f} meses',font=Tipo.seccion(),text_color=T.SAVE).pack(anchor="w",padx=18,pady=5)
         ctk.CTkLabel(emerg,text=f'Meta base: {dinero(e["objetivos"]["base"])} · faltan {dinero(e["faltante_base"])}',text_color=T.TXT).pack(anchor="w",padx=18,pady=(0,16))
-        inv=self._panel(6,2,2)
+        inv=self._panel(7,2,2)
         ctk.CTkLabel(inv,text="INVERSIONES",font=ui.fuente(11,"bold"),text_color=T.MUTED).pack(anchor="w",padx=18,pady=(16,5))
         iv=estado["inversiones"]
         ctk.CTkLabel(inv,text=dinero(iv["total"]),font=Tipo.numero(),text_color=T.PRIMARY).pack(anchor="w",padx=18,pady=5)
