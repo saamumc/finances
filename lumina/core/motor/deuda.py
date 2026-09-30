@@ -29,6 +29,8 @@ def simular_cascada(
     presupuesto = cop(presupuesto)
     if presupuesto < 0:
         raise ValueError("El presupuesto no puede ser negativo.")
+    if limite_meses <= 0:
+        raise ValueError("El límite de meses debe ser mayor que cero.")
 
     work = []
     for fila in filas:
@@ -68,6 +70,15 @@ def simular_cascada(
             "minimos": minimos, "fecha_libre": None, "detalle": work,
             "estrategia": estrategia,
             "nota": "El presupuesto no alcanza los mínimos registrados; no se inventa una fecha de salida.",
+        }
+
+    if presupuesto == 0:
+        return {
+            "viable": False, "meses": None, "deuda_inicial": inicial,
+            "intereses_proyectados": 0, "presupuesto_mensual": 0,
+            "minimos": minimos, "fecha_libre": None, "detalle": work,
+            "estrategia": estrategia,
+            "nota": "Sin presupuesto mensual no existe una amortización posible; se evita simular 600 períodos sin avance.",
         }
 
     total_interest = 0
