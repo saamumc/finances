@@ -286,7 +286,7 @@ class CaracterizacionResponderTests(_Base):
         """Congela el fallo B: la intención nueva captura «diferir tarjeta» (no es la respuesta ideal)."""
         crudo = self.obtenido["responder"]["diferir_tarjeta_baseline_B"]
         self.assertEqual(crudo["intencion"], "card_deferral")
-        self.assertNotIn("quieres diferir", crudo["respuesta"])
+        self.assertIn("qué tarjeta(s) quieres diferir", crudo["respuesta"])
 
 
 class EstructuraIntelligenceTests(unittest.TestCase):
