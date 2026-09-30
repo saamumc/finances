@@ -78,6 +78,33 @@ class FinancialPlanTests(unittest.TestCase):
         self.assertEqual(antes, despues)
         self.assertTrue(r["fases"])
 
+    def test_trayectoria_patrimonio_no_inventa_saldos_historicos(self):
+        db.registrar_ingreso("2026-08", "persona1", "Salario", 3_000_000)
+        db.registrar_ingreso("2026-09", "persona1", "Salario", 4_000_000)
+        antes = db.DB_PATH.read_bytes()
+        r = financial_plan.trayectoria_patrimonio("2026-09", 2)
+        despues = db.DB_PATH.read_bytes()
+
+        self.assertEqual(antes, despues)
+        self.assertEqual([fila["mes"] for fila in r["meses"]], ["2026-08", "2026-09"])
+        self.assertEqual(r["meses"][0]["ingresos"], 3_000_000)
+        self.assertEqual(r["meses"][1]["ingresos"], 4_000_000)
+        self.assertIsNone(r["meses"][0]["patrimonio_neto"])
+        self.assertIsNotNone(r["meses"][1]["patrimonio_neto"])
+        self.assertTrue(r["meses"][1]["referencia_actual"])
+
+    def test_radar_financiero_es_lectura_y_expone_proxima_accion(self):
+        db.registrar_ingreso("2026-09", "persona1", "Salario", 4_000_000)
+        antes = db.DB_PATH.read_bytes()
+        r = financial_plan.radar_financiero("2026-09")
+        despues = db.DB_PATH.read_bytes()
+
+        self.assertEqual(antes, despues)
+        self.assertIn("señales", r)
+        self.assertIn("proxima_accion", r)
+        self.assertIn("proxima_accion_clave", r)
+        self.assertIn("resumen", r)
+
     def test_plan_financiero_exhibe_modulos(self):
         r = financial_plan.financial_os("2026-09")
         for key in ("flujo", "liquidez", "patrimonio", "tarjetas", "ahorros",
