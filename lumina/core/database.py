@@ -2031,6 +2031,19 @@ def verificar_bd_integridad() -> dict[str, Any]:
                 HAVING c.valor_pendiente + COALESCE(SUM(CASE WHEN p.estado='ACTIVO' THEN a.monto_asignado ELSE 0 END),0) != c.valor_original
             """)]
 
+            investment_issues = [dict(row) for row in cursor.execute("""
+                SELECT i.id, i.nombre,
+                       COALESCE(SUM(CASE WHEN m.tipo='APORTE' THEN m.monto
+                                         WHEN m.tipo='RETIRO' THEN -m.monto
+                                         ELSE COALESCE(m.variacion_valor, 0) END),0) AS valor_actual
+                FROM inversiones i
+                LEFT JOIN movimientos_inversion m
+                  ON m.inversion_id=i.id AND m.estado='ACTIVO'
+                WHERE i.activa=1
+                GROUP BY i.id
+                HAVING valor_actual < 0
+            """)]
+
             return {
                 "integridad": integridad,
                 "foreign_keys_activas": fk_estado,
@@ -2042,14 +2055,17 @@ def verificar_bd_integridad() -> dict[str, Any]:
                 "tarjetas_inconsistentes": len(card_issues),
                 "pagos_inconsistentes": len(allocation_issues),
                 "compras_inconsistentes": len(purchase_issues),
+                "inversiones_inconsistentes": len(investment_issues),
                 "detalles_tarjetas": card_issues,
                 "detalles_pagos": allocation_issues,
                 "detalles_compras": purchase_issues,
+                "detalles_inversiones": investment_issues,
                 "ok": (
                     integridad == "ok" and fk_estado
                     and schema_grabada == str(SCHEMA_VERSION)
                     and not orfanas and not card_issues
                     and not allocation_issues and not purchase_issues
+                    and not investment_issues
                 ),
             }
     except Exception as e:
