@@ -42,7 +42,7 @@ class FinancialPlanTests(unittest.TestCase):
         r = financial_plan.financial_os("2026-09")
         for key in ("flujo", "liquidez", "patrimonio", "tarjetas", "ahorros",
                     "deudas", "inversiones", "emergencia", "plan_deuda",
-                    "preparacion_inversion", "prioridades"):
+                    "preparacion_inversion", "proyeccion", "prioridades"):
             self.assertIn(key, r)
 
 
