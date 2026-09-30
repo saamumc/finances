@@ -23,26 +23,9 @@ from ..constants import SAMUEL, SARA, PERSONAS_VALIDAS, PRIORIDAD_DISCRECIONAL, 
 
 # Único lugar para modificar los umbrales del asesor. Son referencias de
 # producto, no reglas universales de finanzas personales.
-RULES: dict[str, int | float] = {
-    "card_use_attention": 0.50,
-    "card_use_high": 0.70,
-    "card_use_critical": 0.90,
-    "high_monthly_interest": 2.0,
-    "emergency_target_months": 3,
-    "minimum_emergency_months": 1,
-    "safe_margin_income_pct": 0.10,
-    "history_months_high_confidence": 3,
-    "anomaly_multiplier": 1.75,
-    "calendar_days_soon": 7,
-    # Señales preventivas: parámetros de producto, no verdades universales.
-    "recurring_amount_tolerance": 0.05,
-    "recurring_min_occurrences": 3,
-    "recurring_history_months": 12,
-    "forecast_days": 60,
-    "savings_fatigue_ratio": 0.40,
-    "savings_fatigue_months": 3,
-    "savings_fatigue_min_free_months": 1.0,
-}
+from .motor.reglas import reglas
+
+RULES = reglas()
 
 
 def previous_month(month: str) -> str:

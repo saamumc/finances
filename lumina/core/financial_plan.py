@@ -13,7 +13,7 @@ from typing import Any
 
 from . import calculations as calc
 from . import database as db
-from .motor.deuda import simular_cascada
+from .engine import unified_debt_payoff
 
 
 def _now() -> str:

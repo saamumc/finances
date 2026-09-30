@@ -38,37 +38,9 @@ NOMBRES: dict[str, str] = {SAMUEL: "Samuel", SARA: "Sara"}
 
 # Parámetros de producto del asesor. Están aquí para que cambiar un criterio
 # sea una decisión visible y no una constante escondida en medio de una regla.
-PARAMS: dict[str, Any] = {
-    # Detección de recurrencia
-    "recurrencia_min_ocurrencias": 3,
-    "recurrencia_historial_meses": 12,
-    "variacion_estable": 0.06,        # coef. de variación considerado "mismo monto"
-    "variacion_moderada": 0.20,       # aún reconocible como el mismo compromiso
-    "variacion_alta": 0.45,           # arriba de esto ya no parece un gasto fijo
-    "hueco_maximo_meses": 2,          # saltos tolerados entre apariciones
-    "confianza_alta": 0.75,
-    "confianza_media": 0.50,
-    "meses_inactivo_para_dudar": 2,   # sin aparecer hace tanto => revisar vigencia
-    # Salud financiera
-    "utilizacion_atencion": 0.50,
-    "utilizacion_alta": 0.70,
-    "utilizacion_critica": 0.90,
-    "carga_fija_alta": 0.50,
-    "carga_fija_atencion": 0.35,
-    "deuda_ingreso_alta": 0.35,
-    "tasa_ahorro_saludable": 0.10,
-    "meses_emergencia_objetivo": 3,
-    "colchon_minimo_meses": 1.0,
-    # Asequibilidad
-    "margen_seguridad_pct": 0.10,
-    "borde_asequible_pct": 0.85,      # gastar >85% del margen ya es "al límite"
-    # Anomalías
-    "multiplicador_anomalia": 1.75,
-    "gasto_grande_vs_mediana": 3.0,
-    "ventana_duplicado_dias": 3,
-    "salto_gasto_categoria": 0.25,
-    "caida_ingreso": 0.15,
-}
+from ..core.motor.reglas import reglas
+
+PARAMS = reglas()
 
 CLASE_FIJO = "gasto_fijo"
 CLASE_PROBABLE_FIJO = "probable_gasto_fijo"

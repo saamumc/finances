@@ -9,7 +9,6 @@ venv/
 env/
 
 # Datos locales y backups financieros
-lumina/core/data/
 data/*.db
 data/*.db-*
 data/*.backup*.db
