@@ -138,7 +138,7 @@ class MigracionV15(unittest.TestCase):
 
     def test_migra_a_v15_y_crea_todas_las_tablas(self) -> None:
         db.init_db()
-        self.assertEqual(self._versiones(), (15, "15"))
+        self.assertEqual(self._versiones(), (16, "16"))
         conn = sqlite3.connect(self.ruta)
         existentes = {n for (n,) in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
         conn.close()
@@ -242,7 +242,7 @@ class MigracionV15(unittest.TestCase):
         self.assertEqual(_foto(self.ruta), antes)
         # y se puede reintentar sin problemas
         db.init_db()
-        self.assertEqual(self._versiones(), (15, "15"))
+        self.assertEqual(self._versiones(), (16, "16"))
 
     # ----------------------------------- tablas nuevas: vacías y sin activar
     def test_tablas_nuevas_vacias_y_config_sin_reglas_sembradas(self) -> None:
@@ -262,7 +262,7 @@ class MigracionV15(unittest.TestCase):
         c.close()
         estado = db.verificar_bd_integridad()
         self.assertTrue(estado["ok"], estado)
-        self.assertEqual(estado["schema_esperado"], "15")
+        self.assertEqual(estado["schema_esperado"], "16")
 
     # ---------------------------------------------------- reglas del esquema
     def test_dinero_solo_integer_y_sin_real(self) -> None:
