@@ -4,7 +4,7 @@ from pathlib import Path
 
 from lumina.core import calculations as calc
 from lumina.core import database as db
-from lumina.constants import DuplicateOperationError, IntegrityError
+from lumina.constants import IntegrityError
 
 
 class FinancialInvariantTests(unittest.TestCase):
@@ -61,11 +61,11 @@ class FinancialInvariantTests(unittest.TestCase):
         self.assertEqual(calc.deuda_pendiente_por_responsabilidad(card),
                          {"persona1": 250_000, "persona2": 350_000})
 
-    def test_transaction_uuid_blocks_duplicate(self):
+    def test_transaction_uuid_es_idempotente(self):
         tx = "11111111-1111-1111-1111-111111111111"
         first = db.registrar_ingreso("2026-09", "persona1", "Salario", 1_000_000, tx)
-        with self.assertRaises(DuplicateOperationError):
-            db.registrar_ingreso("2026-09", "persona1", "Salario", 1_000_000, tx)
+        second = db.registrar_ingreso("2026-09", "persona1", "Salario", 1_000_000, tx)
+        self.assertEqual(second, first)
         self.assertEqual(len(db.get_ingresos("2026-09")), 1)
         self.assertEqual(db.get_ingresos("2026-09")[0]["id"], first)
 
