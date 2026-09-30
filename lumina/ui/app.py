@@ -9,7 +9,6 @@ try:
 except ModuleNotFoundError as exc:
     raise RuntimeError("Instala las dependencias con: pip install -r requirements.txt") from exc
 import logging
-import traceback
 from tkinter import messagebox
 from ..constants import SAMUEL, SARA
 try:  # El proyecto admite service.py en la raíz o dentro del paquete frontend/.
