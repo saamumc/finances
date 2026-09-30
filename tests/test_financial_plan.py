@@ -31,6 +31,43 @@ class FinancialPlanTests(unittest.TestCase):
         self.assertEqual(r["valoraciones"], 50_000)
         self.assertEqual(r["total"], 950_000)
 
+    def test_valoracion_negativa_y_retiro_respetan_invariantes(self):
+        iid = financial_plan.crear_inversion(
+            nombre="Prueba pérdida", clase="fondo", titular="persona1",
+            riesgo="medio", liquidez="media",
+        )
+        aporte = financial_plan.registrar_movimiento_inversion(
+            iid, "APORTE", 1_000_000, fecha="2026-09-01",
+            transaction_uuid="inv-aporte-1",
+        )
+        valoracion = financial_plan.registrar_movimiento_inversion(
+            iid, "VALORACION", -200_000, fecha="2026-09-02",
+            transaction_uuid="inv-val-1",
+        )
+        self.assertGreater(aporte, 0)
+        self.assertGreater(valoracion, 0)
+        self.assertEqual(financial_plan.resumen_inversiones()["total"], 800_000)
+
+        with self.assertRaises(ValueError):
+            financial_plan.registrar_movimiento_inversion(
+                iid, "RETIRO", 900_000, fecha="2026-09-03",
+                transaction_uuid="inv-ret-invalid",
+            )
+
+        financial_plan.reversar_movimiento_inversion(valoracion, "Corrección de valoración")
+        self.assertEqual(financial_plan.resumen_inversiones()["total"], 1_000_000)
+
+    def test_movimiento_inversion_no_puede_anteceder_apertura(self):
+        iid = financial_plan.crear_inversion(
+            nombre="Fechas", clase="cdt", titular="persona1",
+            riesgo="bajo", liquidez="baja", fecha_apertura="2026-09-10",
+        )
+        with self.assertRaises(ValueError):
+            financial_plan.registrar_movimiento_inversion(
+                iid, "APORTE", 100_000, fecha="2026-09-09",
+                transaction_uuid="inv-fecha-1",
+            )
+
     def test_proyeccion_no_mueve_la_bd(self):
         antes = db.DB_PATH.read_bytes()
         r = financial_plan.proyeccion_inversion(100_000, 12, 1200)
