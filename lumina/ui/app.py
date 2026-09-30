@@ -1993,8 +1993,8 @@ class FinanzasApp(ctk.CTk):
         patrimonio_panel=self._panel(10,0,4)
         ctk.CTkLabel(patrimonio_panel,text="PATRIMONIO",font=ui.fuente(11,"bold"),text_color=T.MUTED).pack(anchor="w",padx=18,pady=(16,5))
         patrimonio=estado.get("patrimonio",{})
-        ctk.CTkLabel(patrimonio_panel,text=f'Patrimonio neto: {dinero(patrimonio.get("patrimonio_neto",patrimonio.get("neto",0)))} · activos: {dinero(patrimonio.get("activos",0))} · obligaciones: {dinero(patrimonio.get("obligaciones",0))}',text_color=T.TXT,wraplength=820,justify="left").pack(anchor="w",padx=18,pady=(0,5))
-        ctk.CTkLabel(patrimonio_panel,text=f'Liquidez: {dinero(estado.get("liquidez",{}).get("total",0))} · ahorro: {dinero(estado.get("ahorros",{}).get("total",0))} · inversión: {dinero(estado.get("inversiones",{}).get("total",0))}',text_color=T.MUTED,wraplength=820,justify="left").pack(anchor="w",padx=18,pady=(0,14))
+        ctk.CTkLabel(patrimonio_panel,text=f'Patrimonio neto: {dinero(patrimonio.get("patrimonio_liquido",0))} · por cobrar: {dinero(patrimonio.get("cuentas_por_cobrar",0))} · por pagar: {dinero(patrimonio.get("cuentas_por_pagar",0))}',text_color=T.TXT,wraplength=820,justify="left").pack(anchor="w",padx=18,pady=(0,5))
+        ctk.CTkLabel(patrimonio_panel,text=f'Liquidez operativa: {dinero(patrimonio.get("liquidez_operativa",0))} · reservado: {dinero(patrimonio.get("reservado_metas",0))} · gastos fijos pendientes: {dinero(patrimonio.get("gastos_fijos_pendientes",0))}',text_color=T.MUTED,wraplength=820,justify="left").pack(anchor="w",padx=18,pady=(0,14))
 
         historial=self._panel(11,0,4)
         ctk.CTkLabel(historial,text="TRAYECTORIA PATRIMONIAL",font=ui.fuente(11,"bold"),text_color=T.MUTED).pack(anchor="w",padx=18,pady=(16,5))
