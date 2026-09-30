@@ -1983,12 +1983,14 @@ def verificar_bd_integridad() -> dict[str, Any]:
             card_issues = []
             for row in cursor.execute("""
                 SELECT t.id, t.nombre, t.saldo_deuda, t.saldo_historico_pendiente,
-                       COALESCE(SUM(CASE WHEN c.estado='ACTIVO' THEN c.valor_pendiente ELSE 0 END),0) AS pendientes
+                       COALESCE(SUM(CASE WHEN c.estado='ACTIVO' THEN c.valor_pendiente ELSE 0 END),0) AS pendientes,
+                       COALESCE((SELECT SUM(j.valor_pendiente) FROM ajustes_tarjeta j
+                                 WHERE j.tarjeta_id=t.id AND j.estado='ACTIVO' AND j.variacion>0),0) AS ajustes_pendientes
                 FROM tarjetas t
                 LEFT JOIN compras_tarjeta c ON c.tarjeta_id=t.id
                 GROUP BY t.id
             """):
-                respaldado = int(row["saldo_historico_pendiente"]) + int(row["pendientes"])
+                respaldado = int(row["saldo_historico_pendiente"]) + int(row["pendientes"]) + int(row["ajustes_pendientes"])
                 if int(row["saldo_deuda"]) != respaldado:
                     card_issues.append({
                         "tarjeta_id": row["id"], "nombre": row["nombre"],
