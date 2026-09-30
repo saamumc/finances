@@ -2014,9 +2014,10 @@ def verificar_bd_integridad() -> dict[str, Any]:
 
             purchase_issues = [dict(row) for row in cursor.execute("""
                 SELECT c.id, c.valor_original, c.valor_pendiente,
-                       COALESCE(SUM(a.monto_asignado),0) AS asignado
+                       COALESCE(SUM(CASE WHEN p.estado='ACTIVO' THEN a.monto_asignado ELSE 0 END),0) AS asignado
                 FROM compras_tarjeta c
                 LEFT JOIN asignaciones_pagos a ON a.compra_id=c.id
+                LEFT JOIN pagos_deuda p ON p.id=a.pago_id
                 WHERE c.estado='ACTIVO'
                 GROUP BY c.id
                 HAVING c.valor_pendiente + COALESCE(SUM(a.monto_asignado),0) != c.valor_original
