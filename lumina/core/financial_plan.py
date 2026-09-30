@@ -270,8 +270,14 @@ def plan_deuda_integral(mensual_disponible: int) -> dict[str, Any]:
 
 
 def trayectoria_patrimonio(month: str, meses: int = 12) -> dict[str, Any]:
-    """Muestra la evolución histórica disponible del patrimonio, sin proyectar ingresos."""
-    validar = calc.flujo_caja_mes
+    """Construye una trayectoria comparable usando únicamente datos disponibles.
+
+    Algunas vistas patrimoniales del motor son acumuladas/globales, por lo que
+    no deben repetirse como si fueran saldos históricos mensuales. Para evitar
+    presentar una falsa serie histórica, cada punto conserva solo magnitudes
+    que pueden reconstruirse de forma segura por período. El patrimonio neto
+    se muestra únicamente para el mes de referencia.
+    """
     if meses <= 0 or meses > 60:
         raise ValueError("El horizonte debe estar entre 1 y 60 meses.")
     year, number = (int(x) for x in month.split("-"))
@@ -280,22 +286,31 @@ def trayectoria_patrimonio(month: str, meses: int = 12) -> dict[str, Any]:
         index = year * 12 + number - 1 - offset
         y, m = divmod(index, 12)
         period = f"{y:04d}-{m + 1:02d}"
-        patrimonio = calc.patrimonio_liquido(period)
+        flujo = calc.flujo_caja_mes(period)
+        liquidez = calc.liquidez_total(period)
+        ahorro_mes = calc.ahorro_mensual(period)
+        is_reference = period == month
+        patrimonio = calc.patrimonio_liquido(period) if is_reference else None
         rows.append({
             "mes": period,
-            "patrimonio_neto": int(patrimonio.get("patrimonio_neto", 0)),
-            "liquidez": int(calc.liquidez_total(period)),
-            "ahorro": int(calc.resumen_ahorros().get("total", 0)),
-            "deuda": int(resumen_deudas()["total"]),
-            "inversion": int(resumen_inversiones()["total"]),
+            "patrimonio_neto": int(patrimonio["patrimonio_liquido"]) if patrimonio is not None else None,
+            "liquidez": int(liquidez),
+            "ahorro": int(ahorro_mes),
+            "deuda": int(resumen_deudas()["total"]) if is_reference else None,
+            "inversion": int(resumen_inversiones()["total"]) if is_reference else None,
+            "referencia_actual": is_reference,
+            "ingresos": int(flujo.get("ingresos", 0)),
+            "salidas": int(flujo.get("salidas", 0)),
         })
     cambios = []
     for anterior, actual in zip(rows, rows[1:]):
+        variacion = None
+        if anterior["patrimonio_neto"] is not None and actual["patrimonio_neto"] is not None:
+            variacion = actual["patrimonio_neto"] - anterior["patrimonio_neto"]
         cambios.append({"desde": anterior["mes"], "hasta": actual["mes"],
-                        "variacion_patrimonio": actual["patrimonio_neto"] - anterior["patrimonio_neto"]})
+                        "variacion_patrimonio": variacion})
     return {"mes_referencia": month, "meses": rows, "variaciones": cambios,
-            "nota": "Es historial reconstruido con los datos disponibles; no convierte meses sin movimientos en pronósticos."}
-
+            "nota": "La serie histórica solo muestra como patrimonio las magnitudes que pueden reconstruirse sin inventar saldos. Los meses anteriores al de referencia exponen flujo, liquidez y ahorro del período; el patrimonio actual se muestra únicamente en el mes consultado."}
 
 def asignacion_margen(month: str, margen: int | None = None) -> dict[str, Any]:
     """Propone un presupuesto de margen por fases sin ejecutar ninguna operación."""
