@@ -1968,28 +1968,58 @@ def corregir_reversiones_orfanas(conn: sqlite3.Connection) -> int:
 
 
 def verificar_bd_integridad() -> dict[str, Any]:
-    """Auditoría completa de la BD antes de operaciones críticas."""
+    """Audita SQLite y las invariantes principales sin modificar datos."""
     try:
         with get_conn() as conn:
             cursor = conn.cursor()
-            cursor.execute("PRAGMA integrity_check")
-            integridad = cursor.fetchone()[0]
-            
-            cursor.execute("PRAGMA foreign_keys")
-            fk_estado = bool(cursor.fetchone()[0])
-            
-            cursor.execute("SELECT value FROM config WHERE key='schema_version'")
-            result = cursor.fetchone()
+            integridad = cursor.execute("PRAGMA integrity_check").fetchone()[0]
+            fk_estado = bool(cursor.execute("PRAGMA foreign_keys").fetchone()[0])
+            result = cursor.execute("SELECT value FROM config WHERE key='schema_version'").fetchone()
             schema_grabada = result[0] if result else None
-            
-            cursor.execute("SELECT COUNT(*) FROM tarjetas")
-            tarjetas = cursor.fetchone()[0]
-            
-            cursor.execute("SELECT COUNT(*) FROM gastos")
-            gastos = cursor.fetchone()[0]
-            
+            tarjetas = cursor.execute("SELECT COUNT(*) FROM tarjetas").fetchone()[0]
+            gastos = cursor.execute("SELECT COUNT(*) FROM gastos").fetchone()[0]
             orfanas = auditar_reversiones(conn)
-            
+
+            card_issues = []
+            for row in cursor.execute("""
+                SELECT t.id, t.nombre, t.saldo_deuda, t.saldo_historico_pendiente,
+                       COALESCE(SUM(CASE WHEN c.estado='ACTIVO' THEN c.valor_pendiente ELSE 0 END),0) AS pendientes
+                FROM tarjetas t
+                LEFT JOIN compras_tarjeta c ON c.tarjeta_id=t.id
+                GROUP BY t.id
+            """):
+                respaldado = int(row["saldo_historico_pendiente"]) + int(row["pendientes"])
+                if int(row["saldo_deuda"]) != respaldado:
+                    card_issues.append({
+                        "tarjeta_id": row["id"], "nombre": row["nombre"],
+                        "saldo": int(row["saldo_deuda"]), "respaldado": respaldado,
+                    })
+
+            allocation_issues = []
+            for row in cursor.execute("""
+                SELECT p.id, p.monto, p.monto_historico_aplicado,
+                       COALESCE((SELECT SUM(a.monto_asignado) FROM asignaciones_pagos a WHERE a.pago_id=p.id),0)
+                       + COALESCE((SELECT SUM(a.monto_asignado) FROM asignaciones_pagos_ajustes a WHERE a.pago_id=p.id),0) AS asignado
+                FROM pagos_deuda p
+                WHERE p.estado='ACTIVO'
+            """):
+                esperado = int(row["monto"]) - int(row["monto_historico_aplicado"])
+                if int(row["asignado"]) != esperado:
+                    allocation_issues.append({
+                        "pago_id": row["id"], "monto": int(row["monto"]),
+                        "esperado_asignado": esperado, "asignado": int(row["asignado"]),
+                    })
+
+            purchase_issues = [dict(row) for row in cursor.execute("""
+                SELECT c.id, c.valor_original, c.valor_pendiente,
+                       COALESCE(SUM(a.monto_asignado),0) AS asignado
+                FROM compras_tarjeta c
+                LEFT JOIN asignaciones_pagos a ON a.compra_id=c.id
+                WHERE c.estado='ACTIVO'
+                GROUP BY c.id
+                HAVING c.valor_pendiente + COALESCE(SUM(a.monto_asignado),0) != c.valor_original
+            """)]
+
             return {
                 "integridad": integridad,
                 "foreign_keys_activas": fk_estado,
@@ -1998,18 +2028,21 @@ def verificar_bd_integridad() -> dict[str, Any]:
                 "tarjetas": tarjetas,
                 "gastos": gastos,
                 "reversiones_orfanas": len(orfanas),
+                "tarjetas_inconsistentes": len(card_issues),
+                "pagos_inconsistentes": len(allocation_issues),
+                "compras_inconsistentes": len(purchase_issues),
+                "detalles_tarjetas": card_issues,
+                "detalles_pagos": allocation_issues,
+                "detalles_compras": purchase_issues,
                 "ok": (
-                    integridad == "ok" 
+                    integridad == "ok" and fk_estado
                     and schema_grabada == str(SCHEMA_VERSION)
-                    and len(orfanas) == 0
-                )
+                    and not orfanas and not card_issues
+                    and not allocation_issues and not purchase_issues
+                ),
             }
     except Exception as e:
-        return {
-            "error": str(e),
-            "ok": False
-        }
-
+        return {"error": str(e), "ok": False}
 
 def mostrar_advertencias_bd() -> None:
     """Imprime alertas si hay inconsistencias en la BD."""
