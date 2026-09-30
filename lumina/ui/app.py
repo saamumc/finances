@@ -71,6 +71,11 @@ class FinanzasApp(ctk.CTk):
                                       fg_color="transparent",hover_color=T.ALT,text_color=T.MUTED,font=ui.fuente(12),
                                       command=self._nav("Ajustes",self.show_settings))
         self.settings_b.pack(side="bottom",fill="x",padx=21,pady=20)
+        firma=ctk.CTkFrame(side,fg_color="transparent",corner_radius=0)
+        firma.pack(side="bottom",fill="x",padx=21,pady=(0,8))
+        ctk.CTkFrame(firma,height=1,fg_color=T.BORDER,corner_radius=0).pack(fill="x",pady=(0,5))
+        ctk.CTkLabel(firma,text="saamu_mc",font=ui.serif(11),text_color=T.FAINT).pack(anchor="w")
+        ctk.CTkLabel(firma,text="firma · Lúmina",font=ui.fuente(8),text_color=T.FAINT).pack(anchor="w")
         root=ctk.CTkFrame(self,fg_color=T.BG,corner_radius=0); root.grid(row=0,column=1,sticky="nsew"); root.grid_rowconfigure(1,weight=1); root.grid_columnconfigure(0,weight=1)
         top=ctk.CTkFrame(root,height=72,fg_color=T.BG,corner_radius=0); top.grid(row=0,column=0,sticky="ew"); top.grid_propagate(False)
         self.page=ctk.CTkLabel(top,text="",font=ui.fuente(11,"bold"),text_color=T.FAINT,width=96,anchor="w"); self.page.pack(side="left",padx=(28,12))
