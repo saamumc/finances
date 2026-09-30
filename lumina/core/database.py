@@ -1906,7 +1906,7 @@ def revisar_transaccion(tarjeta_id: int, movimiento_id: int, tipo: str = "movimi
             "modifica_base": False, "tarjeta_id": tarjeta_id, "movimiento_id": movimiento["id"],
             "tipo_original": original_type, "descripcion": descripcion, "monto": monto,
             "situacion_actual": actual, "despues_de_anular": despues,
-            "interes_potencial_evitable": round(monto * float(tarjeta["interes_mensual"]) / 100),
+            "interes_potencial_evitable": int((Decimal(monto) * Decimal(str(tarjeta["interes_mensual"])) / Decimal("100")).quantize(Decimal("1"), rounding=ROUND_HALF_UP)),
             "se_puede_anular": puede, "advertencias": warnings,
         }
 
