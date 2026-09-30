@@ -442,6 +442,9 @@ class FinanceService:
     def plantilla_viaje(self) -> dict[str, Any]:
         return advisor.plantilla_viaje()
 
+    def auditoria_base_datos(self) -> dict[str, Any]:
+        return db.verificar_bd_integridad()
+
     def informe_integridad(self, mes: str | None = None) -> dict[str, Any]:
         return advisor.informe_integridad(mes)
 
