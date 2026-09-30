@@ -508,6 +508,14 @@ class FinanceService:
         from ..core import financial_plan
         financial_plan.desactivar_inversion(int(inversion_id))
 
+    def registrar_deuda(self, datos: dict[str, Any]) -> int:
+        from ..core import financial_plan
+        payload = dict(datos)
+        for key in ("saldo", "tasa_ea_pb", "pago_minimo"):
+            if key in payload:
+                payload[key] = parsear_dinero(payload[key])
+        return financial_plan.registrar_deuda(**payload)
+
     def plan_deuda(self, mensual_disponible: Any) -> dict[str, Any]:
         from ..core import financial_plan
         return financial_plan.plan_deuda(parsear_dinero(mensual_disponible))
