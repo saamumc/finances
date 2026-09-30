@@ -1008,6 +1008,9 @@ def guardar_modelo_pareja(
         raise ValidationError("El modelo proporcional requiere una base de ingresos.")
     if modelo == "pozo" and (pozo_aporte_p1 is None or pozo_aporte_p2 is None):
         raise ValidationError("El modelo de pozo requiere los aportes iniciales.")
+    if modelo == "pozo":
+        pozo_aporte_p1 = validar_monto_no_negativo(pozo_aporte_p1)
+        pozo_aporte_p2 = validar_monto_no_negativo(pozo_aporte_p2)
     tx_uuid = transaction_uuid or str(uuid.uuid4())
     with get_connection() as conn:
         row = conn.execute(
@@ -1044,8 +1047,10 @@ def registrar_aporte_pozo(
     transaction_uuid: str | None = None,
 ) -> int:
     validar_mes(mes)
+    fecha = validar_fecha(fecha)
     persona = validar_persona(persona)
     monto = validar_monto_positivo(monto)
+    concepto = validar_texto(concepto, "El concepto", maximo=500, obligatorio=False) or ""
     tx_uuid = transaction_uuid or str(uuid.uuid4())
     with get_connection() as conn:
         row = conn.execute(
