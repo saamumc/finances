@@ -16,6 +16,8 @@ from typing import Any
 
 from . import calculations as calc
 from . import database as db
+from .motor.deuda import proyectar_una_deuda, simular_cascada
+from .motor.dinero import cop, porcentaje_a_decimal
 from ..constants import SAMUEL, SARA, PERSONAS_VALIDAS, PRIORIDAD_DISCRECIONAL, validar_mes, validar_persona
 
 
@@ -188,53 +190,44 @@ def savings_fatigue(month: str) -> dict[str, Any]:
 
 
 def unified_debt_payoff(monthly_budget: int, strategy: str = "avalancha", *, start_month: str | None = None) -> dict[str, Any]:
-    """Proyecta todas las tarjetas activas con cascada de mínimos y excedentes."""
+    """Proyecta todas las tarjetas activas usando el motor único de deuda."""
     if strategy not in ("avalancha", "snowball"):
         raise ValueError("La estrategia debe ser 'avalancha' o 'snowball'.")
     if not isinstance(monthly_budget, int) or monthly_budget < 0:
         raise ValueError("El presupuesto mensual debe ser un entero no negativo.")
-    cards = [{"id": card["id"], "nombre": card["nombre"], "saldo": int(card["saldo_deuda"]),
-              "tasa": float(card["interes_mensual"]) / 100, "pago_minimo": int(card["pago_minimo"]),
-              "interes": 0, "pagado": 0}
-             for card in calc.resumen_tarjetas(solo_activas=True) if card["saldo_deuda"]]
-    initial = sum(card["saldo"] for card in cards)
-    minimums = sum(min(card["pago_minimo"], card["saldo"]) for card in cards)
-    base_month = start_month or dt.date.today().isoformat()[:7]
-    if not cards:
-        return {"strategy": strategy, "months": 0, "debt_free_date": base_month, "initial_debt": 0,
-                "total_interest": 0, "monthly_budget": monthly_budget, "minimums": 0, "cards": [],
-                "viable": True, "confidence": "Alta", "note": "No hay deuda activa de tarjeta registrada."}
-    if monthly_budget < minimums:
-        return {"strategy": strategy, "months": None, "debt_free_date": None, "initial_debt": initial,
-                "total_interest": 0, "monthly_budget": monthly_budget, "minimums": minimums, "cards": cards,
-                "viable": False, "confidence": "Baja",
-                "note": "El presupuesto indicado no alcanza los mínimos registrados; no es responsable estimar una fecha de salida."}
-    months, total_interest = 0, 0
-    while any(card["saldo"] > 0 for card in cards) and months < 600:
-        months += 1
-        for card in cards:
-            if card["saldo"]:
-                interest = round(card["saldo"] * card["tasa"])
-                card["saldo"] += interest; card["interes"] += interest; total_interest += interest
-        available = monthly_budget
-        for card in cards:
-            minimum = min(card["pago_minimo"], card["saldo"])
-            card["saldo"] -= minimum; card["pagado"] += minimum; available -= minimum
-        order = sorted((card for card in cards if card["saldo"] > 0),
-                       key=(lambda card: (-card["tasa"], -card["saldo"], card["id"])) if strategy == "avalancha"
-                       else (lambda card: (card["saldo"], -card["tasa"], card["id"])))
-        for card in order:
-            if not available: break
-            extra = min(available, card["saldo"])
-            card["saldo"] -= extra; card["pagado"] += extra; available -= extra
-    complete = not any(card["saldo"] > 0 for card in cards)
-    date = _add_months(dt.date.fromisoformat(base_month + "-01"), months).strftime("%Y-%m") if complete else None
-    return {"strategy": strategy, "months": months if complete else None, "debt_free_date": date,
-            "initial_debt": initial, "total_interest": total_interest, "monthly_budget": monthly_budget,
-            "minimums": minimums, "cards": cards, "viable": complete,
-            "confidence": "Media" if all(card["tasa"] > 0 for card in cards) else "Baja",
-            "note": "Proyección con tasa mensual y mínimo registrados; excluye compras, seguros, cargos y cambios de tasa futuros."}
-
+    filas = []
+    for card in calc.resumen_tarjetas(solo_activas=True):
+        if int(card["saldo_deuda"]) <= 0:
+            continue
+        filas.append({
+            "id": card["id"],
+            "nombre": card["nombre"],
+            "saldo": cop(card["saldo_deuda"]),
+            "tasa_mensual": porcentaje_a_decimal(card.get("interes_mensual", 0)),
+            "minimo": cop(card.get("pago_minimo", 0)),
+        })
+    estrategia = "avalancha" if strategy == "avalancha" else "bola_de_nieve"
+    resultado = simular_cascada(filas, monthly_budget, estrategia, start_month=start_month)
+    cards = []
+    for item in resultado["detalle"]:
+        cards.append({
+            "id": item["id"], "nombre": item["nombre"], "saldo": item["saldo"],
+            "tasa": float(item["tasa_mensual"]), "pago_minimo": item["minimo"],
+            "interes": item["intereses"], "pagado": item["pagado"],
+        })
+    return {
+        "strategy": strategy,
+        "months": resultado["meses"],
+        "debt_free_date": resultado["fecha_libre"],
+        "initial_debt": resultado["deuda_inicial"],
+        "total_interest": resultado["intereses_proyectados"],
+        "monthly_budget": resultado["presupuesto_mensual"],
+        "minimums": resultado["minimos"],
+        "cards": cards,
+        "viable": resultado["viable"],
+        "confidence": "Media" if all(x["tasa_mensual"] > 0 for x in filas) else "Baja",
+        "note": resultado.get("nota", ""),
+    }
 
 def activity_months() -> list[str]:
     """Meses observables; solo usa registros activos que ya filtra la base."""
@@ -697,35 +690,30 @@ def financial_state(month: str, person: str | None = None) -> dict[str, Any]:
 
 
 def debt_projection(card_id: int, extra_payment: int = 0) -> dict[str, Any]:
-    """Compara mínimo y mínimo+extra bajo la tasa mensual registrada.
-
-    Nunca estima si el pago no amortiza: devuelve ``None`` para meses. El
-    cálculo excluye compras futuras, comisiones y cambios de tasa.
-    """
+    """Compara mínimo y mínimo+extra usando el motor único de dinero."""
     card = next((item for item in calc.resumen_tarjetas() if item["id"] == card_id), None)
-    if card is None: raise ValueError("Tarjeta no encontrada.")
-    if extra_payment < 0: raise ValueError("El pago adicional no puede ser negativo.")
-    balance, rate = card["saldo_deuda"], card["interes_mensual"] / 100
-    minimum = min(max(card["pago_minimo"], 0), balance)
-    def amortize(payment: int) -> tuple[int | None, int]:
-        pending, interest_total, periods = balance, 0, 0
-        while pending and periods < 600:
-            interest = round(pending * rate)
-            if payment <= interest: return None, interest_total
-            interest_total += interest; pending = max(pending + interest - min(payment, pending + interest), 0); periods += 1
-        return (periods if not pending else None), interest_total
-    current_months, current_interest = amortize(minimum)
-    improved_payment = min(balance + round(balance * rate), minimum + extra_payment)
-    improved_months, improved_interest = amortize(improved_payment)
-    return {"card_id": card_id, "card": card["nombre"], "balance": balance, "monthly_rate": card["interes_mensual"],
-            "minimum_payment": minimum, "extra_payment": extra_payment, "improved_payment": improved_payment,
-            "months_current": current_months, "months_improved": improved_months,
-            "months_saved": max((current_months or 0) - (improved_months or 0), 0) if current_months else None,
-            "interest_current": current_interest, "interest_improved": improved_interest,
-            "interest_saved": max(current_interest - improved_interest, 0),
-            "confidence": "Media" if card["interes_mensual"] and minimum else "Baja",
-            "assumption": "Tasa mensual y pagos constantes; no hay compras nuevas, cargos, seguros ni cambios de tasa."}
-
+    if card is None:
+        raise ValueError("Tarjeta no encontrada.")
+    if extra_payment < 0:
+        raise ValueError("El pago adicional no puede ser negativo.")
+    balance = cop(card["saldo_deuda"])
+    rate = porcentaje_a_decimal(card.get("interes_mensual", 0))
+    minimum = min(max(cop(card.get("pago_minimo", 0)), 0), balance)
+    current_months, current_interest = proyectar_una_deuda(balance, rate, minimum)
+    first_interest = __import__("lumina.core.motor.dinero", fromlist=["interes_cop"]).interes_cop(balance, rate)
+    improved_payment = min(balance + first_interest, minimum + cop(extra_payment))
+    improved_months, improved_interest = proyectar_una_deuda(balance, rate, improved_payment)
+    return {
+        "card_id": card_id, "card": card["nombre"], "balance": balance,
+        "monthly_rate": card["interes_mensual"], "minimum_payment": minimum,
+        "extra_payment": cop(extra_payment), "improved_payment": improved_payment,
+        "months_current": current_months, "months_improved": improved_months,
+        "months_saved": max((current_months or 0) - (improved_months or 0), 0) if current_months else None,
+        "interest_current": current_interest, "interest_improved": improved_interest,
+        "interest_saved": max(current_interest - improved_interest, 0),
+        "confidence": "Media" if card.get("interes_mensual") and minimum else "Baja",
+        "assumption": "Tasa mensual y pagos constantes; no hay compras nuevas, cargos, seguros ni cambios de tasa.",
+    }
 
 def _card_monthly_delta(card: dict[str, Any], month: str) -> dict[str, Any]:
     activity = calc.resumen_mensual_tarjeta(card["id"], month)
