@@ -2839,7 +2839,7 @@ def _r_diferir_tarjeta(mes: str, ctx_dict: dict[str, Any], perfil: dict[str, Any
         "card_deferral",
         texto,
         {
-            "requiere": ["tarjeta", "compra_o_saldo", "numero_cuotas"],
+            "requiere": ["diferir", "priorizar", "presupuesto_disponible"],
             "nota": "No se simuló ningún diferimiento porque faltan datos concretos y las condiciones del emisor."
         },
         "Baja",
