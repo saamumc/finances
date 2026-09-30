@@ -44,7 +44,7 @@ print(f"[database.py] BD será cargada de: {DB_PATH}")
 
 # Cada cambio aditivo de esquema debe aumentar esta versión: así las bases ya
 # existentes ejecutan la migración antes de que la interfaz las consulte.
-SCHEMA_VERSION = 15
+SCHEMA_VERSION = 16
 SCHEMA_VERSION_LEGACY = 14  # último esquema que pasa por _migrar_legacy
 
 
@@ -403,6 +403,9 @@ def upgrade_db(conn: sqlite3.Connection) -> None:
     if current < 15:
         from .migrations_v15 import aplicar_v15
         aplicar_v15(conn)
+    if current < 16:
+        from .migrations_v16 import aplicar_v16
+        aplicar_v16(conn)
 
 
 def init_db() -> None:
