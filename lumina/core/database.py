@@ -26,26 +26,21 @@ def _get_db_path() -> Path:
     Esto resuelve el problema donde database.py buscaba en data/finances.db
     pero el archivo estaba en la raíz del proyecto.
     """
-    # Opción 1: Si está en data/ (estructura nueva/recomendada)
     primaria = Path(__file__).parent / "data" / "finances.db"
     if primaria.exists():
         return primaria
     
-    # Opción 2: Si está en la raíz (estructura actual)
     fallback = Path(__file__).parent / "finances.db"
     if fallback.exists():
         return fallback
     
-    # Opción 3: Si no existe ninguna, usar primaria (creará una nueva si es necesario)
     return primaria
 
 DB_PATH = _get_db_path()
 print(f"[database.py] BD será cargada de: {DB_PATH}")
 
-# Cada cambio aditivo de esquema debe aumentar esta versión: así las bases ya
-# existentes ejecutan la migración antes de que la interfaz las consulte.
 SCHEMA_VERSION = 15
-SCHEMA_VERSION_LEGACY = 14  # último esquema que pasa por _migrar_legacy
+SCHEMA_VERSION_LEGACY = 14
 
 
 @contextmanager
@@ -91,10 +86,6 @@ def _log(conn: sqlite3.Connection, entidad: str, entidad_id: int, accion: str, d
 
 
 def _crear_esquema_fix(conn: sqlite3.Connection) -> None:
-    """Extensión a _crear_esquema() que graba la versión del schema.
-    
-    Llamar DESPUÉS de que _crear_esquema() cree todas las tablas.
-    """
     conn.execute(
         "INSERT OR REPLACE INTO config (key, value) VALUES (?, ?)",
         ("schema_version", str(SCHEMA_VERSION_LEGACY))
@@ -288,7 +279,6 @@ def _crear_esquema(conn: sqlite3.Connection) -> None:
 
 
 def _crear_indices(conn: sqlite3.Connection) -> None:
-    """Crea índices después de completar columnas de una base heredada."""
     statements = (
         "CREATE INDEX IF NOT EXISTS idx_ingresos_mes ON ingresos(mes)",
         "CREATE INDEX IF NOT EXISTS idx_gastos_mes ON gastos(mes)",
@@ -327,7 +317,6 @@ def _add_column_if_missing(conn: sqlite3.Connection, table: str, definition: str
 
 
 def _migrar_legacy(conn: sqlite3.Connection) -> None:
-    """Completa columnas aditivas y sanea UUIDs de bases v1/v2 existentes."""
     additions = {
         "tarjetas": ("saldo_inicial_historico INTEGER NOT NULL DEFAULT 0", "saldo_historico_pendiente INTEGER NOT NULL DEFAULT 0", "fecha_saldo_inicial TEXT", "banco TEXT", "tipo TEXT", "ultimos_4 TEXT", "fecha_corte TEXT", "fecha_pago TEXT", "notas TEXT", "color TEXT", "creado_en TEXT", "actualizado_en TEXT"),
         "gastos": ("tarjeta_id INTEGER", "monto_p1 INTEGER NOT NULL DEFAULT 0", "monto_p2 INTEGER NOT NULL DEFAULT 0", "estado TEXT NOT NULL DEFAULT 'ACTIVO'", "motivo_reversion TEXT", "fecha_reversion TEXT", "transaction_uuid TEXT"),
@@ -347,26 +336,19 @@ def _migrar_legacy(conn: sqlite3.Connection) -> None:
         for definition in definitions:
             _add_column_if_missing(conn, table, definition)
 
-    # Las cuentas previas no tenían alcance explícito: conservan el dueño que
-    # ya se registró. Solo las nuevas pueden declararse compartidas.
     if "titularidad" in _columns(conn, "prestamos_terceros"):
         conn.execute("UPDATE prestamos_terceros SET titularidad=propietario WHERE titularidad IS NULL OR titularidad='persona1'")
 
-    # SQLite permite varios NULL en UNIQUE. Las filas antiguas reciben UUID antes
-    # de crear los índices únicos, conservando la idempotencia desde este punto.
     for table in ("ingresos", "gastos", "pagos_deuda", "liquidaciones_pareja", "compras_tarjeta"):
         for row in conn.execute(f"SELECT id FROM {table} WHERE transaction_uuid IS NULL OR transaction_uuid = ''"):
             conn.execute(f"UPDATE {table} SET transaction_uuid=? WHERE id=?", (_new_uuid(), row["id"]))
         conn.execute(f"CREATE UNIQUE INDEX IF NOT EXISTS uq_{table}_transaction_uuid ON {table}(transaction_uuid)")
 
-    # Los movimientos de tarjeta que ya existían son compras. La fecha se usa
-    # únicamente para el análisis mensual; no altera la deuda almacenada.
     conn.execute("UPDATE compras_tarjeta SET tipo='COMPRA' WHERE tipo IS NULL OR tipo='' ")
     conn.execute("UPDATE compras_tarjeta SET mes=substr(fecha, 1, 7) WHERE (mes IS NULL OR mes='') AND fecha IS NOT NULL")
     ahora = _now_iso()
     conn.execute("UPDATE tarjetas SET creado_en=COALESCE(creado_en, ?), actualizado_en=COALESCE(actualizado_en, ?)", (ahora, ahora))
 
-    # Una v2 no tenía saldo histórico pendiente: su saldo inicial es el pendiente.
     conn.execute("""UPDATE tarjetas SET saldo_historico_pendiente = saldo_inicial_historico
                     WHERE saldo_historico_pendiente = 0 AND saldo_inicial_historico > 0""")
     conn.execute("""CREATE TABLE IF NOT EXISTS metas (
@@ -377,14 +359,7 @@ def _migrar_legacy(conn: sqlite3.Connection) -> None:
         activa INTEGER NOT NULL DEFAULT 1 CHECK (activa IN (0,1)), creado_en TEXT NOT NULL,
         FOREIGN KEY (ahorro_id) REFERENCES ahorros(id))""")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_metas_ahorro ON metas(ahorro_id)")
-
-
-def upgrade_db(conn: sqlite3.Connection) -> None:
-    """Migra por escalones. Cada escalón corre solo si la base está por debajo.
-
-    ``_migrar_legacy`` NO es idempotente (p. ej. restablece saldo histórico
-    pendiente), así que jamás se re-ejecuta sobre una base que ya es v14.
-    """
+    def upgrade_db(conn: sqlite3.Connection) -> None:
     current = conn.execute("PRAGMA user_version").fetchone()[0]
     if current >= SCHEMA_VERSION:
         return
@@ -399,7 +374,6 @@ def upgrade_db(conn: sqlite3.Connection) -> None:
 
 
 def init_db() -> None:
-    """Inicializa una base nueva o respalda y migra una base anterior."""
     needs_backup = DB_PATH.exists()
     with get_conn() as conn:
         current = conn.execute("PRAGMA user_version").fetchone()[0]
@@ -437,12 +411,6 @@ def _insert_idempotente(conn: sqlite3.Connection, sql: str, params: tuple, tx_uu
 def _registrar_reversion_tarjeta(conn: sqlite3.Connection, *, tarjeta_id: int, tipo_original: str,
                                  original_id: int, monto_inverso: int, motivo: str,
                                  fecha: str | None = None, realizado_por: str = "sistema") -> int:
-    """Registra el asiento inverso y el vínculo auditable de una reversa.
-
-    Los agregados vigentes continúan leyendo solo operaciones activas; este
-    asiento conserva el importe contrario y el vínculo uno-a-uno sin volver a
-    contabilizar deuda o consumo en bases existentes.
-    """
     if tipo_original not in {"COMPRA", "INTERES", "CARGO", "PAGO"}:
         raise IntegrityError("Tipo de movimiento original no soportado para reversa.")
     if monto_inverso == 0:
@@ -466,7 +434,6 @@ def _registrar_reversion_tarjeta(conn: sqlite3.Connection, *, tarjeta_id: int, t
 
 def _registrar_reversion_movimiento(conn: sqlite3.Connection, *, tipo_original: str, original_id: int,
                                     monto_inverso: int, motivo: str) -> int:
-    """Registra un asiento inverso genérico, vinculado uno-a-uno al original."""
     if monto_inverso == 0:
         raise IntegrityError("Una reversa debe tener importe inverso distinto de cero.")
     try:
@@ -490,7 +457,6 @@ def registrar_tarjeta(nombre: str, propietario: str, cupo_total: object, *, pago
                       tipo: str | None = None, ultimos_4: str | None = None,
                       fecha_corte: str | None = None, fecha_pago: str | None = None,
                       notas: str | None = None, color: str | None = None) -> int:
-    """Registra una tarjeta; el saldo histórico queda incluido en saldo_deuda."""
     validar_persona(propietario)
     nombre = validar_texto(nombre, "El nombre de la tarjeta")
     cupo = validar_monto_no_negativo(cupo_total)
@@ -534,7 +500,6 @@ def actualizar_tarjeta(tarjeta_id: int, *, nombre: str, propietario: str, cupo_t
                        banco: str | None = None, tipo: str | None = None, ultimos_4: str | None = None,
                        fecha_corte: str | None = None, fecha_pago: str | None = None,
                        notas: str | None = None, color: str | None = None) -> None:
-    """Actualiza configuración, nunca altera silenciosamente la deuda vigente."""
     validar_persona(propietario)
     nombre = validar_texto(nombre, "El nombre de la tarjeta")
     cupo = validar_monto_no_negativo(cupo_total)
@@ -619,14 +584,6 @@ def actualizar_gasto(gasto_id: int, mes: str, nombre: str, categoria: str, valor
                       fecha: str | None, pagador: str, responsabilidad: str,
                       monto_p1: object, monto_p2: object,
                       prioridad: str = PRIORIDAD_OBLIGATORIO) -> None:
-    """Edita un gasto activo sin perder su vínculo contable.
-
-    La forma de pago y la tarjeta de una compra no se cambian aquí: mover una
-    compra entre fuentes de deuda reescribiría pagos FIFO ya registrados. Sí
-    se puede corregir total, fecha, pagador, categoría y distribución incluso
-    después de abonos. En ese caso se conserva lo ya abonado y se recalcula
-    únicamente el saldo pendiente de esa compra.
-    """
     mes = validar_mes(mes)
     nombre = validar_texto(nombre, "El nombre del gasto")
     categoria = validar_texto(categoria, "La categoría")
@@ -653,10 +610,6 @@ def actualizar_gasto(gasto_id: int, mes: str, nombre: str, categoria: str, valor
                                       FROM asignaciones_pagos WHERE compra_id=?""",
                                    (compra["id"],)).fetchone()["total"]
             if abonado:
-                # Una vez aplicado un pago, la responsabilidad económica de la
-                # compra queda congelada. Cambiar total/distribución después
-                # del pago reasignaría retrospectivamente una deuda ya
-                # contabilizada.
                 if valor != compra["valor_original"] or (
                     responsabilidad != compra["responsabilidad"]
                     or p1 != compra["monto_p1"]
@@ -696,12 +649,6 @@ def actualizar_gasto(gasto_id: int, mes: str, nombre: str, categoria: str, valor
 def registrar_movimiento_tarjeta(mes: str, fecha: str, tarjeta_id: int, tipo: str, monto: object,
                                  descripcion: str, responsabilidad: str, monto_p1: object, monto_p2: object,
                                  transaction_uuid: str | None = None, *, periodo: str | None = None) -> int:
-    """Registra un interés o cargo sin convertirlo en una compra ni en salida de caja.
-
-    Se conserva el soporte de pago existente en ``compras_tarjeta`` porque un
-    pago puede amortizar indistintamente una compra, un interés o un cargo.
-    El campo ``tipo`` evita presentarlos como consumo comercial en la UI.
-    """
     mes, fecha = validar_mes(mes), validar_fecha(fecha)
     if tipo not in ("INTERES", "CARGO"):
         raise ValidationError("El movimiento de tarjeta debe ser INTERES o CARGO.")
@@ -731,7 +678,6 @@ def registrar_movimiento_tarjeta(mes: str, fecha: str, tarjeta_id: int, tipo: st
 
 
 def reversar_movimiento_tarjeta(movimiento_id: int, motivo: str) -> None:
-    """Revierte interés o cargo sin borrar historial; exige que no tenga pagos aplicados."""
     motivo = validar_texto(motivo, "El motivo de reversión")
     with get_conn() as conn:
         movimiento = conn.execute("SELECT * FROM compras_tarjeta WHERE id=?", (movimiento_id,)).fetchone()
@@ -759,12 +705,6 @@ def reversar_movimiento_tarjeta(movimiento_id: int, motivo: str) -> None:
 
 def ajustar_saldo_tarjeta(tarjeta_id: int, nuevo_saldo: object, motivo: str, fecha: str,
                          realizado_por: str, transaction_uuid: str | None = None) -> int:
-    """Corrige explícitamente una deuda sin disfrazar el cambio de compra o pago.
-
-    Un aumento queda como ajuste pendiente y se amortiza por la ruta habitual
-    de pagos. Una reducción corrige primero deuda histórica y luego saldos
-    pendientes de movimientos, sin crear una salida de efectivo ficticia.
-    """
     nuevo_saldo = validar_monto_no_negativo(nuevo_saldo)
     motivo = validar_texto(motivo, "El motivo del ajuste")
     fecha = validar_fecha(fecha)
@@ -827,7 +767,6 @@ def ajustar_saldo_tarjeta(tarjeta_id: int, nuevo_saldo: object, motivo: str, fec
 
 
 def reversar_gasto(gasto_id: int, motivo: str) -> None:
-    """Revierte un gasto sin borrar su rastro; una compra abonada no se puede revertir."""
     motivo = validar_texto(motivo, "El motivo de reversión")
     with get_conn() as conn:
         gasto = conn.execute("SELECT * FROM gastos WHERE id=?", (gasto_id,)).fetchone()
@@ -973,7 +912,6 @@ def reversar_pago_tarjeta(pago_id: int, motivo: str) -> None:
 
 def registrar_liquidacion(mes: str, fecha: str, deudor: str, acreedor: str, monto: object,
                           concepto: str | None = None, transaction_uuid: str | None = None) -> int:
-    """Registra una liquidación. Se permite excedente: crea saldo a favor explícito en el cálculo."""
     mes = validar_mes(mes)
     fecha = validar_fecha(fecha)
     validar_persona(deudor); validar_persona(acreedor)
@@ -1006,9 +944,7 @@ def reversar_liquidacion(liquidacion_id: int, motivo: str) -> None:
 def crear_ahorro(nombre: str, propietario: str, descripcion: str | None = None, meta: object = 0,
                  *, titular: str | None = None, tipo: str = "Ahorro", prioridad: str = PRIORIDAD_OBLIGATORIO,
                  icono: str = "💰", color: str = "#5B8DEF", fecha_objetivo: str | None = None) -> int:
-    """Crea una cajita con dueño; su saldo se deriva de movimientos activos."""
     nombre_limpio = validar_texto(nombre, "El nombre de la cajita")
-    # propietario conserva compatibilidad histórica; titular admite "compartido".
     titular = titular or propietario
     if titular != RESP_COMPARTIDO:
         validar_persona(titular)
@@ -1055,7 +991,6 @@ def _saldo_ahorro(conn: sqlite3.Connection, ahorro_id: int) -> int:
 def registrar_movimiento_ahorro(mes: str, fecha: str, ahorro_id: int, tipo: str, monto: object,
                                 concepto: str, transaction_uuid: str | None = None, *, aportante: str = SAMUEL,
                                 gasto_id: int | None = None, motivo: str | None = None) -> int:
-    """Registra un depósito o retiro interno sin convertirlo en ingreso/gasto."""
     mes = validar_mes(mes)
     fecha = validar_fecha(fecha)
     validar_movimiento_ahorro(tipo)
@@ -1087,7 +1022,6 @@ def reversar_movimiento_ahorro(movimiento_id: int, motivo: str) -> None:
         movimiento = conn.execute("SELECT * FROM movimientos_ahorro WHERE id=?", (movimiento_id,)).fetchone()
         if movimiento is None or movimiento["estado"] == ESTADO_REVERSADO:
             raise ValidationError("El movimiento de ahorro no existe o ya está reversado.")
-        # Revertir un depósito no puede dejar el fondo por debajo de cero.
         if movimiento["tipo"] == MOV_AHORRO_DEPOSITO:
             saldo = _saldo_ahorro(conn, movimiento["ahorro_id"])
             if movimiento["monto"] > saldo:
@@ -1103,7 +1037,6 @@ def reversar_movimiento_ahorro(movimiento_id: int, motivo: str) -> None:
 def crear_meta(nombre: str, monto_objetivo: object, *, descripcion: str | None = None,
                fecha_objetivo: str | None = None, prioridad: str = PRIORIDAD_OBLIGATORIO,
                ahorro_id: int | None = None, icono: str = "🎯", color: str = "#5B8DEF") -> int:
-    """Crea un objetivo independiente; puede enlazarse a una cajita existente."""
     nombre = validar_texto(nombre, "El nombre de la meta")
     objetivo = validar_monto_no_negativo(monto_objetivo)
     descripcion = validar_texto(descripcion or "", "La descripción", maximo=500, obligatorio=False) or None
@@ -1169,7 +1102,6 @@ def get_meta(meta_id: int) -> dict:
 
 
 def crear_tercero(nombre: str, tipo: str = "PERSONA", contacto: str = "") -> int:
-    """Crea un tercero independiente, ya sea una persona o un banco."""
     nombre = validar_texto(nombre, "El nombre del tercero")
     tipo = tipo.strip().upper()
     if tipo not in {"PERSONA", "BANCO"}:
@@ -1190,7 +1122,6 @@ def crear_tercero(nombre: str, tipo: str = "PERSONA", contacto: str = "") -> int
 
 
 def get_terceros() -> list[dict]:
-    """Devuelve los terceros registrados, incluso si aún no tienen obligaciones."""
     with get_conn() as conn:
         return [dict(row) for row in conn.execute(
             "SELECT * FROM terceros ORDER BY tipo, nombre COLLATE NOCASE"
@@ -1198,7 +1129,6 @@ def get_terceros() -> list[dict]:
 
 
 def _tercero_id(conn: sqlite3.Connection, nombre: str) -> int:
-    """Obtiene o crea un tercero normalizado dentro de la misma transacción."""
     nombre = validar_texto(nombre, "El nombre del tercero")
     existente = conn.execute("SELECT id FROM terceros WHERE nombre=?", (nombre,)).fetchone()
     if existente is not None:
@@ -1212,12 +1142,6 @@ def _tercero_id(conn: sqlite3.Connection, nombre: str) -> int:
 def registrar_prestamo_tercero(mes: str, fecha: str, tercero: str, tipo: str | TipoCuentaTercero,
                                monto: object, propietario: str, concepto: str, titularidad: str | None = None,
                                transaction_uuid: str | None = None) -> int:
-    """Registra una cuenta por cobrar o por pagar frente a un tercero.
-
-    El propietario identifica quién entregó o recibió el dinero. La obligación
-    no modifica la liquidación interna de Sara y Yo: se informa aparte como
-    activo o pasivo externo.
-    """
     mes, fecha = validar_mes(mes), validar_fecha(fecha)
     tipo_valido = validar_tipo_cuenta_tercero(tipo)
     monto_entero = validar_monto_positivo(monto)
@@ -1238,7 +1162,6 @@ def registrar_prestamo_tercero(mes: str, fecha: str, tercero: str, tipo: str | T
 
 def registrar_abono_tercero(mes: str, fecha: str, prestamo_id: int, monto: object,
                              transaction_uuid: str | None = None) -> int:
-    """Registra un cobro o pago parcial de una obligación externa."""
     mes, fecha = validar_mes(mes), validar_fecha(fecha)
     monto_entero = validar_monto_positivo(monto)
     tx_uuid = transaction_uuid or _new_uuid()
@@ -1258,7 +1181,6 @@ def registrar_abono_tercero(mes: str, fecha: str, prestamo_id: int, monto: objec
 
 
 def reversar_abono_tercero(abono_id: int, motivo: str) -> None:
-    """Revierte un abono conservando el historial y restableciendo su saldo."""
     motivo = validar_texto(motivo, "El motivo de reversión")
     with get_conn() as conn:
         abono = conn.execute("SELECT * FROM abonos_terceros WHERE id=?", (abono_id,)).fetchone()
@@ -1274,7 +1196,6 @@ def reversar_abono_tercero(abono_id: int, motivo: str) -> None:
 
 
 def reversar_prestamo_tercero(prestamo_id: int, motivo: str) -> None:
-    """Solo permite reversar un préstamo que no tiene abonos activos."""
     motivo = validar_texto(motivo, "El motivo de reversión")
     with get_conn() as conn:
         prestamo = conn.execute("SELECT * FROM prestamos_terceros WHERE id=?", (prestamo_id,)).fetchone()
@@ -1290,7 +1211,6 @@ def reversar_prestamo_tercero(prestamo_id: int, motivo: str) -> None:
 
 
 def crear_categoria(nombre: str) -> int:
-    """Registra una categoría reutilizable para gastos y presupuestos."""
     nombre = validar_texto(nombre, "El nombre de la categoría")
     with get_conn() as conn:
         try:
@@ -1314,7 +1234,6 @@ def registrar_gasto_fijo(nombre: str, categoria: str, valor: object, frecuencia:
                           responsabilidad: str, monto_p1: object, monto_p2: object, *, dia_pago: object = None,
                           metodo_pago: str = "debito", tarjeta_id: int | None = None,
                           notas: str | None = None, activo: bool = True) -> int:
-    """Registra una obligación recurrente (renta, servicios, suscripciones, etc.)."""
     nombre = validar_texto(nombre, "El nombre del gasto fijo")
     categoria = validar_texto(categoria, "La categoría")
     valor = validar_monto_positivo(valor)
@@ -1352,7 +1271,6 @@ def actualizar_gasto_fijo(gasto_fijo_id: int, *, nombre: str, categoria: str, va
                            propietario: str, responsabilidad: str, monto_p1: object, monto_p2: object,
                            dia_pago: object = None, metodo_pago: str = "debito",
                            tarjeta_id: int | None = None, activo: bool = True, notas: str | None = None) -> None:
-    """Edita la configuración de un gasto fijo (no crea historial de gastos)."""
     nombre = validar_texto(nombre, "El nombre del gasto fijo")
     categoria = validar_texto(categoria, "La categoría")
     valor = validar_monto_positivo(valor)
@@ -1387,31 +1305,16 @@ def actualizar_gasto_fijo(gasto_fijo_id: int, *, nombre: str, categoria: str, va
 
 
 def eliminar_gasto_fijo(gasto_fijo_id: int) -> None:
-    """Elimina la plantilla de un gasto fijo. No borra gastos ya registrados a partir de ella."""
+    """Elimina la plantilla de un gasto fijo (borrado lógico). No borra gastos ya registrados."""
     with get_conn() as conn:
         existente = conn.execute("SELECT id FROM gastos_fijos WHERE id=?", (gasto_fijo_id,)).fetchone()
         if existente is None:
             raise ValidationError("El gasto fijo no existe.")
-        conn.execute("DELETE FROM gastos_fijos WHERE id=?", (gasto_fijo_id,))
-        _log(conn, "gasto_fijo", gasto_fijo_id, "ELIMINAR", "")
-
-
-def get_gastos_fijos(solo_activos: bool = True) -> list[dict]:
-    query = "SELECT * FROM gastos_fijos" + (" WHERE activo=1" if solo_activos else "") + " ORDER BY nombre COLLATE NOCASE"
-    with get_conn() as conn:
-        return [dict(row) for row in conn.execute(query)]
-
-
-def get_gasto_fijo(gasto_fijo_id: int) -> dict:
-    with get_conn() as conn:
-        row = conn.execute("SELECT * FROM gastos_fijos WHERE id=?", (gasto_fijo_id,)).fetchone()
-        if row is None:
-            raise ValidationError("El gasto fijo no existe.")
-        return dict(row)
+        conn.execute("UPDATE gastos_fijos SET activo=0, actualizado_en=? WHERE id=?", (_now_iso(), gasto_fijo_id))
+        _log(conn, "gasto_fijo", gasto_fijo_id, "ELIMINAR", "Borrado lógico")
 
 
 def guardar_presupuesto(mes: str, categoria_id: int, monto: object) -> int:
-    """Crea o reemplaza el presupuesto mensual de una categoría."""
     mes = validar_mes(mes)
     monto = validar_monto_positivo(monto)
     with get_conn() as conn:
@@ -1470,7 +1373,6 @@ def get_gastos(mes: str | None = None, incluir_reversados: bool = False) -> list
 
 
 def get_gasto(gasto_id: int, incluir_reversado: bool = False) -> dict:
-    """Obtiene un gasto por id para edición; no expone reversados por defecto."""
     with get_conn() as conn:
         gasto = conn.execute("SELECT * FROM gastos WHERE id=?", (gasto_id,)).fetchone()
     if gasto is None or (gasto["estado"] != ESTADO_ACTIVO and not incluir_reversado):
@@ -1544,7 +1446,6 @@ def get_asignaciones_pago_ajustes(pago_id: int) -> list[dict]:
 
 def get_reversiones_tarjeta(tarjeta_id: int | None = None, *, tipo_original: str | None = None,
                             original_id: int | None = None) -> list[dict]:
-    """Devuelve las operaciones inversas, incluyendo su vínculo con el original."""
     query, params = "SELECT * FROM reversiones_tarjeta WHERE 1=1", []
     if tarjeta_id is not None:
         query += " AND tarjeta_id=?"; params.append(tarjeta_id)
@@ -1558,7 +1459,6 @@ def get_reversiones_tarjeta(tarjeta_id: int | None = None, *, tipo_original: str
 
 
 def get_reversiones_movimientos(tipo_original: str | None = None, original_id: int | None = None) -> list[dict]:
-    """Asientos inversos de movimientos no destructivos, con vínculo al original."""
     query, params = "SELECT * FROM reversiones_movimientos WHERE 1=1", []
     if tipo_original is not None:
         query += " AND tipo_original=?"; params.append(tipo_original)
@@ -1570,7 +1470,6 @@ def get_reversiones_movimientos(tipo_original: str | None = None, original_id: i
 
 
 def verificar_reversiones_movimientos() -> list[dict]:
-    """Comprueba que cada asiento inverso continúe enlazado a un original reversado."""
     tables = {"ingreso": "ingresos", "gasto": "gastos", "pago": "pagos_deuda",
               "liquidacion": "liquidaciones_pareja", "ahorro": "movimientos_ahorro",
               "movimiento_tarjeta": "compras_tarjeta", "abono_tercero": "abonos_terceros",
@@ -1588,8 +1487,7 @@ def verificar_reversiones_movimientos() -> list[dict]:
 
 
 def proponer_anular_movimiento(tipo: str, movimiento_id: int) -> dict:
-    """Previsualiza una anulación sin escribir SQLite ni delegar en una operación persistente."""
-    from . import calculations as calc  # Importación tardía: calculations depende de esta capa.
+    from . import calculations as calc
 
     normalized = tipo.lower()
     if normalized in {"movimiento_tarjeta", "pago"}:
@@ -1674,7 +1572,6 @@ def proponer_anular_movimiento(tipo: str, movimiento_id: int) -> dict:
 
 
 def _distribuir_proporcional(monto: int, total: int, monto_p1: int) -> tuple[int, int]:
-    """Prorratea un abono conservando pesos enteros y la suma exacta."""
     if not total:
         return 0, monto
     p1 = int((Decimal(monto) * Decimal(monto_p1) / Decimal(total)).quantize(
@@ -1684,13 +1581,7 @@ def _distribuir_proporcional(monto: int, total: int, monto_p1: int) -> tuple[int
 
 
 def revisar_transaccion(tarjeta_id: int, movimiento_id: int, tipo: str = "movimiento") -> dict:
-    """Vista previa pura de una anulación de tarjeta.
-
-    ``tipo`` admite ``movimiento``/``compra`` (id de compras_tarjeta),
-    ``gasto`` (id del gasto que originó una compra) y ``pago``. No escribe en
-    SQLite; la UI debe usar esta respuesta antes de pedir confirmación.
-    """
-    from . import calculations as calc  # Importación tardía: calculations ya usa database.
+    from . import calculations as calc
 
     tipo = tipo.lower()
     if tipo not in {"movimiento", "compra", "gasto", "pago"}:
@@ -1769,7 +1660,6 @@ def revisar_transaccion(tarjeta_id: int, movimiento_id: int, tipo: str = "movimi
                 "utilizacion": (tarjeta["saldo_deuda"] - monto) / tarjeta["cupo_total"] if puede and tarjeta["cupo_total"] else None,
                 "responsabilidad_samuel": deuda_responsable[SAMUEL] - movimiento["monto_p1"] if puede else None,
                 "responsabilidad_sara": deuda_responsable[SARA] - movimiento["monto_p2"] if puede else None,
-                # Una compra sin pagos no deja saldo entre personas: retirar consumo y deuda pendiente se compensa.
                 "saldo_samuel": balance[f"balance_neto_{SAMUEL}"] if puede else None,
                 "saldo_sara": balance[f"balance_neto_{SARA}"] if puede else None,
             }
@@ -1785,13 +1675,12 @@ def revisar_transaccion(tarjeta_id: int, movimiento_id: int, tipo: str = "movimi
             "modifica_base": False, "tarjeta_id": tarjeta_id, "movimiento_id": movimiento["id"],
             "tipo_original": original_type, "descripcion": descripcion, "monto": monto,
             "situacion_actual": actual, "despues_de_anular": despues,
-            "interes_potencial_evitable": round(monto * float(tarjeta["interes_mensual"]) / 100),
+            "interes_potencial_evitable": int((Decimal(monto) * Decimal(str(tarjeta["interes_mensual"])) / Decimal("100")).quantize(Decimal("1"), rounding=ROUND_HALF_UP)),
             "se_puede_anular": puede, "advertencias": warnings,
         }
 
 
 def get_prestamos_terceros(incluir_reversados: bool = False) -> list[dict]:
-    """Devuelve obligaciones externas con el nombre del tercero."""
     filtro = "" if incluir_reversados else " WHERE p.estado=?"
     query = """SELECT p.*, t.nombre AS tercero, t.tipo AS tipo_tercero FROM prestamos_terceros p
                JOIN terceros t ON t.id=p.tercero_id""" + filtro + " ORDER BY p.fecha DESC, p.id DESC"
@@ -1812,7 +1701,6 @@ def get_abonos_tercero(prestamo_id: int, incluir_reversados: bool = False) -> li
 
 
 def get_ahorros(solo_activos: bool = True) -> list[dict]:
-    """Devuelve bolsas y sus saldos derivados de movimientos activos."""
     filtro = "WHERE a.activa=1" if solo_activos else ""
     query = f"""SELECT a.*, COALESCE(SUM(CASE m.tipo WHEN ? THEN m.monto WHEN ? THEN -m.monto END), 0) AS saldo,
                 COALESCE(SUM(CASE WHEN m.tipo=? AND m.aportante=? THEN m.monto ELSE 0 END), 0) AS aporte_p1,
@@ -1842,7 +1730,6 @@ def get_movimientos_ahorro(ahorro_id: int | None = None, mes: str | None = None,
 
 
 def auditar_reversiones(conn: sqlite3.Connection) -> list[dict[str, Any]]:
-    """Verifica que todo movimiento reversado tenga registro en el log."""
     cursor = conn.cursor()
     cursor.execute("""
         SELECT rm.id, rm.original_id, rm.tipo_original, rm.creado_en
@@ -1860,7 +1747,6 @@ def auditar_reversiones(conn: sqlite3.Connection) -> list[dict[str, Any]]:
 
 
 def corregir_reversiones_orfanas(conn: sqlite3.Connection) -> int:
-    """Elimina registros de reversiones huérfanos (ya no tienen movimiento)."""
     orfanas = auditar_reversiones(conn)
     if not orfanas:
         print("[database.py] ✓ No hay reversiones orfanas")
@@ -1890,7 +1776,6 @@ def corregir_reversiones_orfanas(conn: sqlite3.Connection) -> int:
 
 
 def verificar_bd_integridad() -> dict[str, Any]:
-    """Auditoría completa de la BD antes de operaciones críticas."""
     try:
         with get_conn() as conn:
             cursor = conn.cursor()
@@ -1934,7 +1819,6 @@ def verificar_bd_integridad() -> dict[str, Any]:
 
 
 def mostrar_advertencias_bd() -> None:
-    """Imprime alertas si hay inconsistencias en la BD."""
     estado = verificar_bd_integridad()
     if estado.get("error"):
         print(f"✗ Error verificando BD: {estado['error']}")
@@ -1952,7 +1836,6 @@ def mostrar_advertencias_bd() -> None:
 
 
 def auto_migrar_si_necesario() -> bool:
-    """Si la BD existe pero es vieja, intenta migrar. Retorna True si migró."""
     try:
         with get_conn() as conn:
             cursor = conn.cursor()
@@ -1971,9 +1854,8 @@ def auto_migrar_si_necesario() -> bool:
             if actual is None or actual[0] != str(SCHEMA_VERSION):
                 print(f"[database.py]   Migrando BD a versión {SCHEMA_VERSION}...")
                 backup_db()
-                upgrade_db(conn)  # migra de verdad; antes solo escribía el número
+                upgrade_db(conn)
                 
-                # ACTUALIZAR LA VERSIÓN DEL ESQUEMA AL FINALIZAR
                 conn.execute(
                     "INSERT OR REPLACE INTO config (key, value) VALUES (?, ?)",
                     ("schema_version", str(SCHEMA_VERSION))
