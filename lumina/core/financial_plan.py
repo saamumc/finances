@@ -10,8 +10,11 @@ from __future__ import annotations
 import datetime as dt
 import json
 from typing import Any
+from decimal import Decimal
 
 from . import calculations as calc
+from .motor.deuda import simular_cascada
+from .motor.dinero import ea_pb_a_mensual
 from . import database as db
 from .motor.deuda import simular_cascada
 
@@ -179,86 +182,38 @@ def resumen_deudas() -> dict[str, Any]:
 
 
 def _deuda_integral_rows() -> list[dict[str, Any]]:
-    """Normaliza tarjetas y deudas estructuradas en una sola vista de pago."""
-    rows = []
+    """Normaliza tarjetas y otras deudas en la entrada canónica del motor."""
+    rows: list[dict[str, Any]] = []
     for card in calc.resumen_tarjetas(solo_activas=True):
-        if int(card["saldo_deuda"]) > 0:
+        saldo = int(card.get("saldo_deuda") or 0)
+        if saldo > 0:
             rows.append({
                 "id": f"tarjeta:{card['id']}", "origen": "tarjeta", "nombre": card["nombre"],
-                "saldo": int(card["saldo_deuda"]),
-                "tasa_mensual": max(0.0, float(card.get("interes_mensual") or 0) / 100),
-                "minimo": min(int(card.get("pago_minimo") or 0), int(card["saldo_deuda"])),
+                "saldo": saldo,
+                "tasa_mensual": Decimal(str(card.get("interes_mensual") or 0)) / Decimal("100"),
+                "minimo": min(int(card.get("pago_minimo") or 0), saldo),
             })
     for debt in _otras_deudas():
-        rows.append({
-            "id": f"deuda:{debt['id']}", "origen": "deuda", "nombre": f"{debt['acreedor']} · {debt['tipo']}",
-            "saldo": int(debt["saldo"]),
-            "tasa_mensual": max(0.0, float(debt.get("tasa_ea_pb") or 0) / 10000 / 12),
-            "minimo": min(int(debt.get("pago_minimo") or 0), int(debt["saldo"])),
-        })
+        saldo = int(debt.get("saldo") or 0)
+        if saldo > 0:
+            rows.append({
+                "id": f"deuda:{debt['id']}", "origen": "deuda",
+                "nombre": f"{debt['acreedor']} · {debt['tipo']}",
+                "saldo": saldo,
+                "tasa_mensual": ea_pb_a_mensual(int(debt.get("tasa_ea_pb") or 0)),
+                "minimo": min(int(debt.get("pago_minimo") or 0), saldo),
+            })
     return rows
 
 
 def _simular_deuda_integral(mensual_disponible: int, estrategia: str) -> dict[str, Any]:
+    """Delegación única: la simulación integral usa el mismo motor determinista."""
     if estrategia not in {"avalancha", "bola_de_nieve"}:
         raise ValueError("Estrategia no válida.")
-    budget = max(0, int(mensual_disponible))
-    rows = _deuda_integral_rows()
-    initial = sum(x["saldo"] for x in rows)
-    minimums = sum(x["minimo"] for x in rows)
-    if not rows:
-        return {"estrategia": estrategia, "viable": True, "meses": 0, "deuda_inicial": 0,
-                "intereses_proyectados": 0, "presupuesto_mensual": budget, "minimos": 0,
-                "fecha_libre": dt.date.today().strftime("%Y-%m"), "detalle": []}
-    if budget < minimums:
-        return {"estrategia": estrategia, "viable": False, "meses": None, "deuda_inicial": initial,
-                "intereses_proyectados": 0, "presupuesto_mensual": budget, "minimos": minimums,
-                "fecha_libre": None, "detalle": rows,
-                "nota": "El presupuesto no alcanza los mínimos registrados; no se inventa una fecha de salida."}
-    work = [dict(x) for x in rows]
-    total_interest = 0
-    months = 0
-    while any(x["saldo"] > 0 for x in work) and months < 600:
-        months += 1
-        for item in work:
-            if item["saldo"] > 0 and item["tasa_mensual"] > 0:
-                interest = int(round(item["saldo"] * item["tasa_mensual"]))
-                item["saldo"] += interest
-                item["intereses"] = item.get("intereses", 0) + interest
-                total_interest += interest
-        available = budget
-        for item in work:
-            payment = min(item["minimo"], item["saldo"])
-            item["saldo"] -= payment
-            item["pagado"] = item.get("pagado", 0) + payment
-            available -= payment
-        active = [x for x in work if x["saldo"] > 0]
-        if estrategia == "avalancha":
-            active.sort(key=lambda x: (-x["tasa_mensual"], -x["saldo"], x["id"]))
-        else:
-            active.sort(key=lambda x: (x["saldo"], -x["tasa_mensual"], x["id"]))
-        for item in active:
-            if available <= 0:
-                break
-            extra = min(available, item["saldo"])
-            item["saldo"] -= extra
-            item["pagado"] = item.get("pagado", 0) + extra
-            available -= extra
-    viable = not any(x["saldo"] > 0 for x in work)
-    start = dt.date.today().replace(day=1)
-    free_date = None
-    if viable:
-        index = start.year * 12 + start.month - 1 + months
-        year, month = divmod(index, 12)
-        free_date = f"{year:04d}-{month + 1:02d}"
-    return {
-        "estrategia": estrategia, "viable": viable, "meses": months if viable else None,
-        "deuda_inicial": initial, "intereses_proyectados": total_interest,
-        "presupuesto_mensual": budget, "minimos": minimums, "fecha_libre": free_date,
-        "detalle": work,
-        "nota": "Simulación matemática con saldos y tasas registradas. No incluye cargos, compras futuras ni cambios de tasa."
-    }
-
+    return simular_cascada(
+        _deuda_integral_rows(), max(0, int(mensual_disponible)), estrategia,
+        start_month=dt.date.today().strftime("%Y-%m"),
+    )
 
 def plan_deuda_integral(mensual_disponible: int) -> dict[str, Any]:
     """Planifica tarjetas y otras deudas en una sola cascada."""
