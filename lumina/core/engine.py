@@ -740,11 +740,18 @@ def audit_integrity(month: str | None = None) -> dict[str, Any]:
     except Exception as exc:
         issues.append({"area": "pareja", "severity": "critical", "detail": str(exc)})
     for card in calc.resumen_tarjetas():
-        known = sum(item["valor_pendiente"] for item in db.get_compras_tarjeta(card["id"])) + card["saldo_historico_pendiente"]
+        known = (
+            sum(item["valor_pendiente"] for item in db.get_compras_tarjeta(card["id"]))
+            + sum(item["valor_pendiente"] for item in db.get_ajustes_tarjeta(card["id"]) if item["estado"] == "ACTIVO" and item["variacion"] > 0)
+            + card["saldo_historico_pendiente"]
+        )
         if card["saldo_deuda"] < 0 or card["saldo_deuda"] > card["cupo_total"]:
             issues.append({"area": "tarjeta", "severity": "critical", "detail": f"{card['nombre']} tiene saldo o cupo inconsistente."})
         if known > card["saldo_deuda"]:
             issues.append({"area": "tarjeta", "severity": "attention", "detail": f"{card['nombre']} tiene movimientos pendientes por encima del saldo registrado."})
+    bd = db.verificar_bd_integridad()
+    if not bd.get("ok"):
+        issues.append({"area": "base_datos", "severity": "critical", "detail": "La auditoría de SQLite detectó inconsistencias; revisar detalles antes de operar."})
     for goal in calc.progreso_metas():
         if goal["actual"] > goal["monto_objetivo"] and not goal["cumplida"]:
             issues.append({"area": "meta", "severity": "attention", "detail": f"La meta {goal['nombre']} requiere revisión de progreso."})
