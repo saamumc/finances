@@ -16,7 +16,6 @@ from . import calculations as calc
 from .motor.deuda import simular_cascada
 from .motor.dinero import ea_pb_a_mensual
 from . import database as db
-from .motor.deuda import simular_cascada
 
 
 def _now() -> str:
@@ -51,7 +50,10 @@ def resumen_inversiones() -> dict[str, Any]:
         rows = [m for m in movimientos if m["inversion_id"] == inv["id"]]
         aportes = sum(_money(m["monto"]) for m in rows if m["tipo"] == "APORTE")
         retiros = sum(_money(m["monto"]) for m in rows if m["tipo"] == "RETIRO")
-        valoraciones = sum(int(m["monto"] or 0) for m in rows if m["tipo"] == "VALORACION")
+        valoraciones = sum(
+            int(m.get("variacion_valor") if m.get("variacion_valor") is not None else m["monto"] or 0)
+            for m in rows if m["tipo"] == "VALORACION"
+        )
         capital_neto = aportes - retiros
         valor_actual = capital_neto + valoraciones
         total_aportes += aportes
@@ -91,10 +93,21 @@ def crear_inversion(*, nombre: str, clase: str, titular: str, riesgo: str,
         raise ValueError("Riesgo no válido.")
     if liquidez not in {"alta", "media", "baja"}:
         raise ValueError("Liquidez no válida.")
+    if not str(nombre or "").strip():
+        raise ValueError("El nombre de la inversión es obligatorio.")
     if horizonte_meses is not None and horizonte_meses <= 0:
         raise ValueError("El horizonte debe ser positivo.")
     if comision_pb_anual < 0:
         raise ValueError("La comisión no puede ser negativa.")
+    apertura = fecha_apertura or dt.date.today().isoformat()
+    try:
+        dt.date.fromisoformat(apertura)
+        if fecha_vencimiento:
+            dt.date.fromisoformat(fecha_vencimiento)
+    except ValueError as exc:
+        raise ValueError("La fecha de inversión no es válida.") from exc
+    if fecha_vencimiento and fecha_vencimiento < apertura:
+        raise ValueError("La fecha de vencimiento no puede ser anterior a la apertura.")
     with db.get_conn() as conn:
         cur = conn.execute(
             """INSERT INTO inversiones
@@ -102,19 +115,38 @@ def crear_inversion(*, nombre: str, clase: str, titular: str, riesgo: str,
                 comision_pb_anual, fecha_apertura, fecha_vencimiento, activa, creado_en, transaction_uuid)
                VALUES (?,?,?,?,?,?,?,?,?,?,1,?,?)""",
             (nombre.strip(), clase, entidad, titular, horizonte_meses, liquidez, riesgo,
-             comision_pb_anual, fecha_apertura or dt.date.today().isoformat(),
-             fecha_vencimiento, _now(), db._new_uuid()),
+             comision_pb_anual, apertura, fecha_vencimiento, _now(), db._new_uuid()),
         )
         return int(cur.lastrowid)
 
 
 def registrar_movimiento_inversion(inversion_id: int, tipo: str, monto: int,
-                                   fecha: str | None = None) -> int:
+                                   fecha: str | None = None,
+                                   transaction_uuid: str | None = None) -> int:
     if tipo not in {"APORTE", "RETIRO", "VALORACION"}:
         raise ValueError("Tipo de movimiento de inversión no válido.")
-    if monto < 0 or (tipo != "VALORACION" and monto == 0):
-        raise ValueError("El monto no es válido.")
+    try:
+        monto = int(monto)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("El monto no es válido.") from exc
+    if tipo == "VALORACION":
+        variacion = monto
+        almacenado = abs(monto)
+    else:
+        if monto <= 0:
+            raise ValueError("El aporte o retiro debe ser positivo.")
+        variacion = 0
+        almacenado = monto
+    fecha_real = fecha or dt.date.today().isoformat()
+    try:
+        dt.date.fromisoformat(fecha_real)
+    except ValueError as exc:
+        raise ValueError("La fecha del movimiento no es válida.") from exc
+    tx_uuid = transaction_uuid or db._new_uuid()
     with db.get_conn() as conn:
+        existe = conn.execute("SELECT id FROM movimientos_inversion WHERE transaction_uuid=?", (tx_uuid,)).fetchone()
+        if existe:
+            return int(existe["id"])
         existe = conn.execute(
             "SELECT id FROM inversiones WHERE id=? AND activa=1", (inversion_id,)
         ).fetchone()
@@ -122,9 +154,9 @@ def registrar_movimiento_inversion(inversion_id: int, tipo: str, monto: int,
             raise ValueError("La inversión no existe o está inactiva.")
         cur = conn.execute(
             """INSERT INTO movimientos_inversion
-               (inversion_id, fecha, tipo, monto, estado, transaction_uuid)
-               VALUES (?,?,?,?, 'ACTIVO', ?)""",
-            (inversion_id, fecha or dt.date.today().isoformat(), tipo, int(monto), db._new_uuid()),
+               (inversion_id, fecha, tipo, monto, variacion_valor, estado, transaction_uuid)
+               VALUES (?,?,?,?,?, 'ACTIVO', ?)""",
+            (inversion_id, fecha_real, tipo, almacenado, variacion, tx_uuid),
         )
         return int(cur.lastrowid)
 
@@ -134,37 +166,6 @@ def desactivar_inversion(inversion_id: int) -> None:
         cur = conn.execute("UPDATE inversiones SET activa=0 WHERE id=? AND activa=1", (inversion_id,))
         if cur.rowcount == 0:
             raise ValueError("La inversión no existe o ya está inactiva.")
-
-
-def _otras_deudas() -> list[dict[str, Any]]:
-    with db.get_conn() as conn:
-        rows = conn.execute(
-            "SELECT * FROM deudas WHERE activa=1 AND saldo>0 ORDER BY saldo DESC, id"
-        ).fetchall()
-    return [dict(r) for r in rows]
-
-def registrar_deuda(*, acreedor: str, tipo: str, titular: str, saldo: int,
-                    tasa_ea_pb: int = 0, pago_minimo: int = 0,
-                    dia_pago: int | None = None, fecha_fin: str | None = None) -> int:
-    if saldo < 0 or tasa_ea_pb < 0 or pago_minimo < 0:
-        raise ValueError("Saldo, tasa y pago mínimo no pueden ser negativos.")
-    if titular not in {"persona1", "persona2", "compartido"}:
-        raise ValueError("Titular no válido.")
-    if not acreedor.strip() or not tipo.strip():
-        raise ValueError("Acreedor y tipo son obligatorios.")
-    if dia_pago is not None and not 1 <= dia_pago <= 31:
-        raise ValueError("Día de pago inválido.")
-    with db.get_conn() as conn:
-        cur = conn.execute(
-            """INSERT INTO deudas
-               (acreedor, tipo, titular, saldo, tasa_ea_pb, pago_minimo, pago_actual,
-                dia_pago, fecha_fin, activa, creado_en, transaction_uuid)
-               VALUES (?,?,?,?,?,?,0,?,?,1,?,?)""",
-            (acreedor.strip(), tipo.strip(), titular, int(saldo), int(tasa_ea_pb),
-             int(pago_minimo), dia_pago, fecha_fin, _now(), db._new_uuid()),
-        )
-        return int(cur.lastrowid)
-
 
 def resumen_deudas() -> dict[str, Any]:
     tarjetas = [x for x in calc.resumen_tarjetas(solo_activas=True) if x["saldo_deuda"] > 0]
