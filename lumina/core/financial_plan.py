@@ -173,10 +173,163 @@ def resumen_deudas() -> dict[str, Any]:
     }
 
 
+def _deuda_integral_rows() -> list[dict[str, Any]]:
+    """Normaliza tarjetas y deudas estructuradas en una sola vista de pago."""
+    rows = []
+    for card in calc.resumen_tarjetas(solo_activas=True):
+        if int(card["saldo_deuda"]) > 0:
+            rows.append({
+                "id": f"tarjeta:{card['id']}", "origen": "tarjeta", "nombre": card["nombre"],
+                "saldo": int(card["saldo_deuda"]),
+                "tasa_mensual": max(0.0, float(card.get("interes_mensual") or 0) / 100),
+                "minimo": min(int(card.get("pago_minimo") or 0), int(card["saldo_deuda"])),
+            })
+    for debt in _otras_deudas():
+        rows.append({
+            "id": f"deuda:{debt['id']}", "origen": "deuda", "nombre": f"{debt['acreedor']} · {debt['tipo']}",
+            "saldo": int(debt["saldo"]),
+            "tasa_mensual": max(0.0, float(debt.get("tasa_ea_pb") or 0) / 10000 / 12),
+            "minimo": min(int(debt.get("pago_minimo") or 0), int(debt["saldo"])),
+        })
+    return rows
+
+
+def _simular_deuda_integral(mensual_disponible: int, estrategia: str) -> dict[str, Any]:
+    if estrategia not in {"avalancha", "bola_de_nieve"}:
+        raise ValueError("Estrategia no válida.")
+    budget = max(0, int(mensual_disponible))
+    rows = _deuda_integral_rows()
+    initial = sum(x["saldo"] for x in rows)
+    minimums = sum(x["minimo"] for x in rows)
+    if not rows:
+        return {"estrategia": estrategia, "viable": True, "meses": 0, "deuda_inicial": 0,
+                "intereses_proyectados": 0, "presupuesto_mensual": budget, "minimos": 0,
+                "fecha_libre": dt.date.today().strftime("%Y-%m"), "detalle": []}
+    if budget < minimums:
+        return {"estrategia": estrategia, "viable": False, "meses": None, "deuda_inicial": initial,
+                "intereses_proyectados": 0, "presupuesto_mensual": budget, "minimos": minimums,
+                "fecha_libre": None, "detalle": rows,
+                "nota": "El presupuesto no alcanza los mínimos registrados; no se inventa una fecha de salida."}
+    work = [dict(x) for x in rows]
+    total_interest = 0
+    months = 0
+    while any(x["saldo"] > 0 for x in work) and months < 600:
+        months += 1
+        for item in work:
+            if item["saldo"] > 0 and item["tasa_mensual"] > 0:
+                interest = int(round(item["saldo"] * item["tasa_mensual"]))
+                item["saldo"] += interest
+                item["intereses"] = item.get("intereses", 0) + interest
+                total_interest += interest
+        available = budget
+        for item in work:
+            payment = min(item["minimo"], item["saldo"])
+            item["saldo"] -= payment
+            item["pagado"] = item.get("pagado", 0) + payment
+            available -= payment
+        active = [x for x in work if x["saldo"] > 0]
+        if estrategia == "avalancha":
+            active.sort(key=lambda x: (-x["tasa_mensual"], -x["saldo"], x["id"]))
+        else:
+            active.sort(key=lambda x: (x["saldo"], -x["tasa_mensual"], x["id"]))
+        for item in active:
+            if available <= 0:
+                break
+            extra = min(available, item["saldo"])
+            item["saldo"] -= extra
+            item["pagado"] = item.get("pagado", 0) + extra
+            available -= extra
+    viable = not any(x["saldo"] > 0 for x in work)
+    start = dt.date.today().replace(day=1)
+    free_date = None
+    if viable:
+        index = start.year * 12 + start.month - 1 + months
+        year, month = divmod(index, 12)
+        free_date = f"{year:04d}-{month + 1:02d}"
+    return {
+        "estrategia": estrategia, "viable": viable, "meses": months if viable else None,
+        "deuda_inicial": initial, "intereses_proyectados": total_interest,
+        "presupuesto_mensual": budget, "minimos": minimums, "fecha_libre": free_date,
+        "detalle": work,
+        "nota": "Simulación matemática con saldos y tasas registradas. No incluye cargos, compras futuras ni cambios de tasa."
+    }
+
+
+def plan_deuda_integral(mensual_disponible: int) -> dict[str, Any]:
+    """Planifica tarjetas y otras deudas en una sola cascada."""
+    return {
+        "presupuesto_mensual": max(0, int(mensual_disponible)),
+        "deuda_total": sum(x["saldo"] for x in _deuda_integral_rows()),
+        "avalancha": _simular_deuda_integral(mensual_disponible, "avalancha"),
+        "bola_de_nieve": _simular_deuda_integral(mensual_disponible, "bola_de_nieve"),
+        "ordenes": {
+            "avalancha": "Mayor tasa mensual primero.",
+            "bola_de_nieve": "Menor saldo primero.",
+        },
+    }
+
+
+def trayectoria_patrimonio(month: str, meses: int = 12) -> dict[str, Any]:
+    """Muestra la evolución histórica disponible del patrimonio, sin proyectar ingresos."""
+    validar = calc.flujo_caja_mes
+    if meses <= 0 or meses > 60:
+        raise ValueError("El horizonte debe estar entre 1 y 60 meses.")
+    year, number = (int(x) for x in month.split("-"))
+    rows = []
+    for offset in range(meses - 1, -1, -1):
+        index = year * 12 + number - 1 - offset
+        y, m = divmod(index, 12)
+        period = f"{y:04d}-{m + 1:02d}"
+        patrimonio = calc.patrimonio_liquido(period)
+        rows.append({
+            "mes": period,
+            "patrimonio_neto": int(patrimonio.get("patrimonio_neto", 0)),
+            "liquidez": int(calc.liquidez_total(period)),
+            "ahorro": int(calc.resumen_ahorros().get("total", 0)),
+            "deuda": int(resumen_deudas()["total"]),
+            "inversion": int(resumen_inversiones()["total"]),
+        })
+    cambios = []
+    for anterior, actual in zip(rows, rows[1:]):
+        cambios.append({"desde": anterior["mes"], "hasta": actual["mes"],
+                        "variacion_patrimonio": actual["patrimonio_neto"] - anterior["patrimonio_neto"]})
+    return {"mes_referencia": month, "meses": rows, "variaciones": cambios,
+            "nota": "Es historial reconstruido con los datos disponibles; no convierte meses sin movimientos en pronósticos."}
+
+
+def asignacion_margen(month: str, margen: int | None = None) -> dict[str, Any]:
+    """Propone un presupuesto de margen por fases sin ejecutar ninguna operación."""
+    flujo = calc.flujo_caja_mes(month)
+    libre = max(0, int(flujo.get("ahorro", 0))) if margen is None else max(0, int(margen))
+    deudas = resumen_deudas()
+    emergencia = fondo_emergencia(month)
+    tarjetas = resumen_tarjetas_operativo(month)
+    if deudas["total"] > 0:
+        prioridad = "deuda"
+        objetivo = deudas["total"]
+    elif emergencia["faltante_base"] > 0:
+        prioridad = "emergencia"
+        objetivo = emergencia["faltante_base"]
+    else:
+        prioridad = "patrimonio"
+        objetivo = max(0, int(resumen_inversiones()["total"]))
+    return {
+        "mes": month, "margen_disponible": libre, "prioridad_principal": prioridad,
+        "objetivo_pendiente": int(objetivo), "minimos_tarjetas": int(tarjetas["pago_minimo_total"]),
+        "asignacion_sugerida": {
+            "minimos_deuda": min(int(libre), sum(x["minimo"] for x in _deuda_integral_rows())),
+            "extra_deuda": max(0, libre - sum(x["minimo"] for x in _deuda_integral_rows())) if deudas["total"] else 0,
+            "emergencia": max(0, libre - sum(x["minimo"] for x in _deuda_integral_rows())) if not deudas["total"] and emergencia["faltante_base"] > 0 else 0,
+            "inversion": libre if not deudas["total"] and emergencia["faltante_base"] <= 0 else 0,
+            "gasto_discrecional": 0,
+        },
+        "nota": "La asignación es una propuesta de planificación; no constituye una transferencia ni un pago automático."
+    }
+
 def plan_deuda(mensual_disponible: int) -> dict[str, Any]:
     """Compara cascadas con todas las tarjetas y deudas v15 sin alterar SQLite."""
-    cards = unified_debt_payoff(max(0, int(mensual_disponible)), "avalancha")
-    snow = unified_debt_payoff(max(0, int(mensual_disponible)), "snowball")
+    cards = _simular_deuda_integral(max(0, int(mensual_disponible)), "avalancha")
+    snow = _simular_deuda_integral(max(0, int(mensual_disponible)), "bola_de_nieve")
     return {
         "presupuesto_mensual": max(0, int(mensual_disponible)),
         "avalancha": cards,
@@ -185,6 +338,7 @@ def plan_deuda(mensual_disponible: int) -> dict[str, Any]:
             "avalancha": "prioriza la tasa mensual más alta",
             "bola_de_nieve": "prioriza el saldo más pequeño",
         },
+        "integral": plan_deuda_integral(mensual_disponible),
     }
 
 
@@ -286,6 +440,8 @@ def financial_os(month: str, presupuesto_deuda: int | None = None) -> dict[str, 
     libre = max(0, int(estado["flujo"].get("ahorro", 0)))
     presupuesto = max(0, int(presupuesto_deuda if presupuesto_deuda is not None else libre))
     estado["plan_deuda"] = plan_deuda(presupuesto)
+    estado["asignacion_margen"] = asignacion_margen(month, libre)
+    estado["trayectoria_patrimonio"] = trayectoria_patrimonio(month, 12)
     estado["tarjetas_operativo"] = resumen_tarjetas_operativo(month)
     estado["plan_mensual_deuda"] = plan_mensual_deuda(month, presupuesto)
     estado["preparacion_inversion"] = readiness(month)
