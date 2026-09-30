@@ -1998,7 +1998,7 @@ class FinanzasApp(ctk.CTk):
 
         historial=self._panel(11,0,4)
         ctk.CTkLabel(historial,text="TRAYECTORIA PATRIMONIAL",font=ui.fuente(11,"bold"),text_color=T.MUTED).pack(anchor="w",padx=18,pady=(16,5))
-        trayectoria=estado.get("trayectoria_patrimonio",[])
+        trayectoria=estado.get("trayectoria_patrimonio",{}).get("meses",[])
         if trayectoria:
             puntos=trayectoria[-3:]
             texto=" · ".join(f'{x.get("mes","")} {dinero(x.get("patrimonio_neto",x.get("neto",0)))}' for x in puntos)
