@@ -38,6 +38,16 @@ class FinancialPlanTests(unittest.TestCase):
         self.assertEqual(antes, despues)
         self.assertGreater(r["valor_proyectado"], r["aportado"])
 
+    def test_deuda_no_tarjeta_entra_en_total(self):
+        did = financial_plan.registrar_deuda(
+            acreedor="Banco", tipo="prestamo", titular="persona1",
+            saldo=2_000_000, tasa_ea_pb=1800, pago_minimo=100_000,
+        )
+        self.assertGreater(did, 0)
+        r = financial_plan.resumen_deudas()
+        self.assertEqual(r["otras_total"], 2_000_000)
+        self.assertEqual(r["total"], 2_000_000)
+
     def test_plan_financiero_exhibe_modulos(self):
         r = financial_plan.financial_os("2026-09")
         for key in ("flujo", "liquidez", "patrimonio", "tarjetas", "ahorros",
