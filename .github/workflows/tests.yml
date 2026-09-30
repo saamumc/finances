@@ -5,6 +5,7 @@ on:
     branches:
       - main
       - cleanup-stability-2026-09
+      - financial-os-bulk-2026-09
   pull_request:
     branches:
       - main
@@ -21,5 +22,5 @@ jobs:
           python-version: "3.12"
       - name: Install dependencies
         run: python -m pip install -r requirements.txt
-      - name: Run domain tests
-        run: python -m pytest -q tests/test_domain.py tests/test_invariants.py
+      - name: Run complete unittest suite
+        run: python -m unittest discover -s tests -p "test_*.py" -v

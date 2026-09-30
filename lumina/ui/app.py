@@ -9,7 +9,6 @@ try:
 except ModuleNotFoundError as exc:
     raise RuntimeError("Instala las dependencias con: pip install -r requirements.txt") from exc
 import logging
-import traceback
 from tkinter import messagebox
 from ..constants import SAMUEL, SARA
 try:  # El proyecto admite service.py en la raíz o dentro del paquete frontend/.
@@ -52,6 +51,8 @@ class FinanzasApp(ctk.CTk):
             ("Gastos fijos","▤",self.show_fixed_expenses),
             ("Cajitas","◇",self.show_savings),
             ("Tarjetas","▣",self.show_cards),
+            ("Plan financiero","◈",self.show_financial_os),
+            ("Inversiones","◎",self.show_investments),
             ("Deudas","⊘",self.show_debts),
             ("Asesor","✦",self.show_advisor),
             ("Análisis","▦",self.show_analytics),
@@ -69,6 +70,11 @@ class FinanzasApp(ctk.CTk):
                                       fg_color="transparent",hover_color=T.ALT,text_color=T.MUTED,font=ui.fuente(12),
                                       command=self._nav("Ajustes",self.show_settings))
         self.settings_b.pack(side="bottom",fill="x",padx=21,pady=20)
+        firma=ctk.CTkFrame(side,fg_color="transparent",corner_radius=0)
+        firma.pack(side="bottom",fill="x",padx=21,pady=(0,8))
+        ctk.CTkFrame(firma,height=1,fg_color=T.BORDER,corner_radius=0).pack(fill="x",pady=(0,5))
+        ctk.CTkLabel(firma,text="saamu_mc",font=ui.serif(11),text_color=T.FAINT).pack(anchor="w")
+        ctk.CTkLabel(firma,text="firma · Lúmina",font=ui.fuente(8),text_color=T.FAINT).pack(anchor="w")
         root=ctk.CTkFrame(self,fg_color=T.BG,corner_radius=0); root.grid(row=0,column=1,sticky="nsew"); root.grid_rowconfigure(1,weight=1); root.grid_columnconfigure(0,weight=1)
         top=ctk.CTkFrame(root,height=72,fg_color=T.BG,corner_radius=0); top.grid(row=0,column=0,sticky="ew"); top.grid_propagate(False)
         self.page=ctk.CTkLabel(top,text="",font=ui.fuente(11,"bold"),text_color=T.FAINT,width=96,anchor="w"); self.page.pack(side="left",padx=(28,12))
@@ -1855,6 +1861,160 @@ class FinanzasApp(ctk.CTk):
                 signo="+" if linea["efecto"]>=0 else "−"
                 ctk.CTkLabel(razones,text=f"{signo}{dinero(abs(linea['efecto']))} · {linea['detalle']}",text_color=T.TXT,wraplength=850,justify="left").pack(anchor="w",padx=26,pady=2)
         ctk.CTkFrame(razones,height=10,fg_color="transparent").pack()
+
+    def show_investments(self)->None:
+        self._clear("Inversiones","Inversiones")
+        self._heading("Inversiones","Capital invertido, movimientos, valor actual y evolución registrada.")
+        self.add_button.configure(text="＋ Nueva inversión",command=self.investment_create_dialog)
+        resumen=self.service.resumen_inversiones()
+        self._metric(2,0,"Valor actual",dinero(resumen["total"]),"Capital + variaciones registradas",T.PRIMARY)
+        self._metric(2,1,"Aportes",dinero(resumen["aportes"]),f"{resumen['cantidad']} inversión(es)",T.OK)
+        self._metric(2,2,"Retiros",dinero(resumen["retiros"]),"Salidas registradas",T.WARN)
+        self._metric(2,3,"Variación",dinero(resumen["valoraciones"]),"Solo valoraciones registradas",T.SAVE if resumen["valoraciones"]>=0 else T.BAD)
+        if not resumen["inversiones"]:
+            self._place(ui.estado_vacio(self.content,"Todavía no hay inversiones","Crea una inversión para comenzar a registrar aportes, retiros y valoraciones.",accion="＋ Crear inversión",comando=self.investment_create_dialog,icono="◎"),3,0,4)
+            return
+        self._section(3,"Portafolio","Cada valor se deriva exclusivamente de los movimientos registrados.")
+        for indice,inv in enumerate(resumen["inversiones"]):
+            caja=self._open_panel(4+indice//2,indice%2*2,2)
+            cab=ui.fila(caja); cab.pack(fill="x",padx=Espacio.PANEL_PAD,pady=(Espacio.MD,2))
+            ctk.CTkLabel(cab,text=inv["nombre"],font=Tipo.tarjeta(),text_color=T.TXT).pack(side="left")
+            ui.insignia(cab,inv["clase"].upper(),tono="suave").pack(side="right")
+            ui.ayuda(caja,f'Titular: {inv["titular"]} · Riesgo: {inv["riesgo"]} · Liquidez: {inv["liquidez"]}',ancho=420).pack(anchor="w",padx=Espacio.PANEL_PAD)
+            ctk.CTkLabel(caja,text=dinero(inv["valor_actual"]),font=Tipo.numero(),text_color=T.PRIMARY).pack(anchor="w",padx=Espacio.PANEL_PAD,pady=(8,2))
+            ctk.CTkLabel(caja,text=f'Aportes {dinero(inv["aportes"])} · retiros {dinero(inv["retiros"])} · variación {dinero(inv["valoraciones"])}',text_color=T.MUTED).pack(anchor="w",padx=Espacio.PANEL_PAD,pady=(0,8))
+            fila=ui.fila(caja); fila.pack(fill="x",padx=Espacio.PANEL_PAD,pady=(0,Espacio.MD))
+            ctk.CTkButton(fila,text="＋ Aporte",height=32,fg_color=T.PRIMARY,command=lambda x=inv["id"]: self.investment_movement_dialog(x,"APORTE")).pack(side="left",padx=(0,5))
+            ctk.CTkButton(fila,text="− Retiro",height=32,fg_color=T.ALT,text_color=T.TXT,command=lambda x=inv["id"]: self.investment_movement_dialog(x,"RETIRO")).pack(side="left",padx=5)
+            ctk.CTkButton(fila,text="↗ Valorar",height=32,fg_color=T.ALT,text_color=T.TXT,command=lambda x=inv["id"]: self.investment_movement_dialog(x,"VALORACION")).pack(side="left",padx=5)
+
+    def investment_create_dialog(self)->None:
+        d=ctk.CTkToplevel(self,fg_color=T.BG); d.title("Nueva inversión"); d.geometry("560x700"); d.minsize(460,600); d.grab_set()
+        body=ctk.CTkScrollableFrame(d,fg_color=T.S,corner_radius=Espacio.RADIO); body.pack(fill="both",expand=True,padx=14,pady=14)
+        ctk.CTkLabel(body,text="◎ Nueva inversión",font=Tipo.dialogo()).pack(anchor="w",padx=18,pady=(18,2))
+        name=self._entry(body,"Nombre"); clase=self._entry(body,"Clase","cdt",["cdt","fic","etf","accion","bono","efectivo","pension","otro"])
+        titular=self._entry(body,"Titular","persona1",["persona1","persona2","compartido"]); riesgo=self._entry(body,"Riesgo","medio",["bajo","medio","alto"])
+        liquidez=self._entry(body,"Liquidez","media",["alta","media","baja"]); entidad=self._entry(body,"Entidad (opcional)")
+        horizonte=self._entry(body,"Horizonte en meses (opcional)"); comision=self._entry(body,"Comisión anual (puntos básicos)","0")
+        apertura=self._entry(body,"Fecha de apertura (AAAA-MM-DD, opcional)"); vencimiento=self._entry(body,"Fecha de vencimiento (AAAA-MM-DD, opcional)")
+        def save()->None:
+            h=self._value(horizonte); payload={"nombre":self._value(name),"clase":self._value(clase),"titular":self._value(titular),"riesgo":self._value(riesgo),"liquidez":self._value(liquidez),"entidad":self._value(entidad) or None,"horizonte_meses":int(h) if h else None,"comision_pb_anual":int(self._value(comision) or 0),"fecha_apertura":self._value(apertura) or None,"fecha_vencimiento":self._value(vencimiento) or None}
+            self.service.crear_inversion(payload); d.destroy(); self.show_investments()
+        ctk.CTkButton(body,text="Crear inversión",height=40,fg_color=T.PRIMARY,command=lambda:self._run(save,"Inversión creada")).pack(fill="x",padx=18,pady=22)
+
+    def investment_movement_dialog(self,inversion_id:int,tipo:str)->None:
+        d=ctk.CTkToplevel(self,fg_color=T.BG); d.title(tipo.title()); d.geometry("460x360"); d.grab_set()
+        body=ctk.CTkFrame(d,fg_color=T.S); body.pack(fill="both",expand=True,padx=14,pady=14)
+        ctk.CTkLabel(body,text=tipo.title(),font=Tipo.dialogo()).pack(anchor="w",padx=18,pady=(18,2))
+        monto=self._entry(body,"Monto COP"); fecha=self._entry(body,"Fecha (AAAA-MM-DD, opcional)")
+        def save()->None:
+            self.service.registrar_movimiento_inversion(inversion_id,tipo,self._value(monto),self._value(fecha) or None); d.destroy(); self.show_investments()
+        ctk.CTkButton(body,text="Guardar movimiento",height=40,fg_color=T.PRIMARY,command=lambda:self._run(save,"Movimiento registrado")).pack(fill="x",padx=18,pady=22)
+
+    def show_financial_os(self)->None:
+        self._clear("Plan financiero","Plan financiero")
+        self._heading("Plan financiero","Una sola foto para avanzar desde las deudas hasta la construcción de patrimonio.")
+        estado=self.service.financial_os(self.selected_month)
+        resumen=estado["resumen"]
+        self._card(2,0,"Dinero libre",dinero(resumen["dinero_libre"]),"Margen registrado para decidir",T.OK,2)
+        self._card(2,2,"Deuda total",dinero(resumen["deuda_total"]),"Tarjetas + otras deudas",T.WARN,2)
+        self._card(3,0,"Fondo de emergencia",f'{resumen["emergencia_cobertura"]:.1f} meses',"Cobertura registrada",T.SAVE,2)
+        self._card(3,2,"Inversión actual",dinero(resumen["inversion_actual"]),"Valor derivado de movimientos",T.PRIMARY,2)
+        caja=self._panel(4,0,4)
+        ctk.CTkLabel(caja,text="ORDEN FINANCIERO",font=ui.fuente(11,"bold"),text_color=T.MUTED).pack(anchor="w",padx=18,pady=(16,8))
+        for item in estado["prioridades"]:
+            fila=ui.fila(caja); fila.pack(fill="x",padx=18,pady=5)
+            ui.insignia(fila,str(item["orden"]),tono="suave").pack(side="left",padx=(0,10))
+            ctk.CTkLabel(fila,text=item["titulo"],font=ui.fuente(13,"bold"),text_color=T.TXT).pack(side="left")
+            ctk.CTkLabel(fila,text=item["detalle"],text_color=T.MUTED,wraplength=600,justify="left").pack(side="left",padx=12)
+        deuda=self._panel(5,0,4)
+        ctk.CTkLabel(deuda,text="SALIDA DE DEUDAS",font=ui.fuente(11,"bold"),text_color=T.MUTED).pack(anchor="w",padx=18,pady=(16,5))
+        p=estado["plan_deuda"]["avalancha"]; s=estado["plan_deuda"]["bola_de_nieve"]
+        ctk.CTkLabel(deuda,text=f'Presupuesto mensual: {dinero(estado["plan_deuda"]["presupuesto_mensual"])}',text_color=T.TXT).pack(anchor="w",padx=18)
+        meses_avalancha=p.get("meses",p.get("months"))
+        texto_avalancha=(f'Avalancha: {meses_avalancha} meses · interés proyectado {dinero(p.get("intereses_proyectados",p.get("total_interest",0)))}' if meses_avalancha else p.get("note",p.get("mensaje","No hay una simulación viable con el presupuesto actual.")))
+        meses_nieve=s.get("meses",s.get("months"))
+        texto_nieve=(f'Bola de nieve: {meses_nieve} meses · interés proyectado {dinero(s.get("intereses_proyectados",s.get("total_interest",0)))}' if meses_nieve else s.get("note",s.get("mensaje","No hay una simulación viable con el presupuesto actual.")))
+        ctk.CTkLabel(deuda,text=texto_avalancha,text_color=T.TXT).pack(anchor="w",padx=18,pady=5)
+        ctk.CTkLabel(deuda,text=texto_nieve,text_color=T.MUTED).pack(anchor="w",padx=18,pady=(0,14))
+        op=self._panel(6,0,4)
+        ctk.CTkLabel(op,text="CONTROL OPERATIVO",font=ui.fuente(11,"bold"),text_color=T.MUTED).pack(anchor="w",padx=18,pady=(16,6))
+        tarjetas_op=estado.get("tarjetas_operativo",{})
+        ctk.CTkLabel(op,text=f'Tarjetas: {dinero(tarjetas_op.get("deuda_total",0))} de deuda · mínimos {dinero(tarjetas_op.get("pago_minimo_total",0))} · pagado este mes {dinero(tarjetas_op.get("pagado_mes",0))}',
+                     text_color=T.TXT,wraplength=820,justify="left").pack(anchor="w",padx=18,pady=3)
+        faltante=tarjetas_op.get("faltante_minimos",0)
+        ctk.CTkLabel(op,text=(f'⚠ Faltan {dinero(faltante)} para cubrir mínimos registrados.' if faltante else "✓ Los mínimos registrados de tarjetas están cubiertos."),
+                     text_color=T.WARN if faltante else T.OK).pack(anchor="w",padx=18,pady=3)
+        asignacion=estado.get("asignacion_margen",{})
+        sugerida=asignacion.get("asignacion_sugerida",{})
+        ctk.CTkLabel(op,text=f'Margen asignado: mínimos {dinero(sugerida.get("minimos_deuda",0))} · extra deuda {dinero(sugerida.get("extra_deuda",0))} · emergencia {dinero(sugerida.get("emergencia",0))} · inversión {dinero(sugerida.get("inversion",0))}',
+                     text_color=T.MUTED,wraplength=820,justify="left").pack(anchor="w",padx=18,pady=(3,8))
+        radar=estado.get("radar_financiero",{})
+        ctk.CTkLabel(op,text="RADAR DEL MES",font=ui.fuente(10,"bold"),text_color=T.MUTED).pack(anchor="w",padx=18,pady=(4,5))
+        fila_radar=ui.fila(op); fila_radar.pack(fill="x",padx=18,pady=(0,7))
+        for señal in radar.get("señales",[]):
+            tono=T.OK if señal["estado"]=="ok" else T.WARN if señal["estado"]=="atencion" else T.BAD
+            celda=ctk.CTkFrame(fila_radar,fg_color=T.SUNKEN,corner_radius=Espacio.RADIO_SM)
+            celda.pack(side="left",fill="both",expand=True,padx=(0,6))
+            ctk.CTkLabel(celda,text=señal["titulo"],font=ui.fuente(9,"bold"),text_color=T.MUTED).pack(anchor="w",padx=10,pady=(8,1))
+            ctk.CTkLabel(celda,text=señal["valor"],font=ui.fuente(11,"bold"),text_color=tono).pack(anchor="w",padx=10)
+            ctk.CTkLabel(celda,text=señal["detalle"],font=ui.fuente(9),text_color=T.FAINT,wraplength=150,justify="left").pack(anchor="w",padx=10,pady=(1,8))
+        ctk.CTkLabel(op,text=f'→ Próxima acción: {radar.get("proxima_accion","Revisar el mes.")}',
+                     font=ui.fuente(10,"bold"),text_color=T.TXT,wraplength=820,justify="left").pack(anchor="w",padx=18,pady=(2,14))
+        emerg=self._panel(7,0,2)
+        ctk.CTkLabel(emerg,text="FONDO DE EMERGENCIA",font=ui.fuente(11,"bold"),text_color=T.MUTED).pack(anchor="w",padx=18,pady=(16,5))
+        e=estado["emergencia"]
+        ctk.CTkLabel(emerg,text=f'Actual: {dinero(e["actual"])} · {e["cobertura_meses"]:.1f} meses',font=Tipo.seccion(),text_color=T.SAVE).pack(anchor="w",padx=18,pady=5)
+        ctk.CTkLabel(emerg,text=f'Meta base: {dinero(e["objetivos"]["base"])} · faltan {dinero(e["faltante_base"])}',text_color=T.TXT).pack(anchor="w",padx=18,pady=(0,16))
+        inv=self._panel(7,2,2)
+        ctk.CTkLabel(inv,text="INVERSIONES",font=ui.fuente(11,"bold"),text_color=T.MUTED).pack(anchor="w",padx=18,pady=(16,5))
+        iv=estado["inversiones"]
+        ctk.CTkLabel(inv,text=dinero(iv["total"]),font=Tipo.numero(),text_color=T.PRIMARY).pack(anchor="w",padx=18,pady=5)
+        ctk.CTkLabel(inv,text=f'{iv["cantidad"]} inversión(es) · aportes {dinero(iv["aportes"])} · variación registrada {dinero(iv["valoraciones"])}',text_color=T.TXT,wraplength=390,justify="left").pack(anchor="w",padx=18,pady=(0,16))
+
+        decisiones=self._panel(8,0,4)
+        ctk.CTkLabel(decisiones,text="DECISIONES DEL MES",font=ui.fuente(11,"bold"),text_color=T.MUTED).pack(anchor="w",padx=18,pady=(16,6))
+        mensual=estado.get("plan_mensual_deuda",{})
+        alloc=estado.get("asignacion_margen",{}).get("asignacion_sugerida",{})
+        ctk.CTkLabel(decisiones,text=f'Capacidad para deuda: {dinero(mensual.get("disponible",0))} · mínimos: {dinero(mensual.get("total_minimos",0))} · extra: {dinero(mensual.get("extra_sobre_minimos",0))}',text_color=T.TXT,wraplength=820,justify="left").pack(anchor="w",padx=18,pady=3)
+        ctk.CTkLabel(decisiones,text=f'Propuesta: deuda {dinero(alloc.get("extra_deuda",0))} · emergencia {dinero(alloc.get("emergencia",0))} · inversión {dinero(alloc.get("inversion",0))}',text_color=T.MUTED,wraplength=820,justify="left").pack(anchor="w",padx=18,pady=3)
+        fases=estado.get("mapa_accion",{}).get("fases",[])
+        activa=fases[0] if fases else {}
+        ctk.CTkLabel(decisiones,text=f'FASE ACTIVA · {str(activa.get("clave","sin datos")).upper()}',font=ui.fuente(10,"bold"),text_color=T.PRIMARY).pack(anchor="w",padx=18,pady=(6,1))
+        ctk.CTkLabel(decisiones,text=activa.get("accion","Revisar el radar del mes."),text_color=T.TXT,wraplength=820,justify="left").pack(anchor="w",padx=18,pady=(0,14))
+
+        futuro=self._panel(9,0,2)
+        ctk.CTkLabel(futuro,text="PROYECCIÓN",font=ui.fuente(11,"bold"),text_color=T.MUTED).pack(anchor="w",padx=18,pady=(16,5))
+        proy=estado.get("proyeccion",{})
+        ctk.CTkLabel(futuro,text=dinero(proy.get("valor_proyectado",0)),font=Tipo.numero(),text_color=T.PRIMARY).pack(anchor="w",padx=18,pady=4)
+        ctk.CTkLabel(futuro,text=f'En {proy.get("meses",60)} meses · aportado {dinero(proy.get("aportado",0))} · ganancia modelada {dinero(proy.get("ganancia_proyectada",0))}',text_color=T.TXT,wraplength=390,justify="left").pack(anchor="w",padx=18,pady=(0,4))
+        ctk.CTkLabel(futuro,text="Escenario matemático a tasa 0%; no representa un rendimiento garantizado.",text_color=T.FAINT,wraplength=390,justify="left").pack(anchor="w",padx=18,pady=(0,16))
+
+        ready_panel=self._panel(9,2,2)
+        ctk.CTkLabel(ready_panel,text="PREPARACIÓN PARA INVERTIR",font=ui.fuente(11,"bold"),text_color=T.MUTED).pack(anchor="w",padx=18,pady=(16,5))
+        ready=estado.get("preparacion_inversion",{})
+        listo=bool(ready.get("listo_para_invertir"))
+        ctk.CTkLabel(ready_panel,text="LISTO" if listo else "EN CONSTRUCCIÓN",font=Tipo.numero(),text_color=T.OK if listo else T.WARN).pack(anchor="w",padx=18,pady=4)
+        ctk.CTkLabel(ready_panel,text=f'Margen mensual {dinero(ready.get("margen_mensual",0))} · ahorro acumulado {dinero(ready.get("ahorro_acumulado",0))}',text_color=T.TXT,wraplength=390,justify="left").pack(anchor="w",padx=18,pady=(0,4))
+        ctk.CTkLabel(ready_panel,text=" · ".join(ready.get("razones",[])) or "No hay bloqueos registrados.",text_color=T.MUTED,wraplength=390,justify="left").pack(anchor="w",padx=18,pady=(0,16))
+
+        patrimonio_panel=self._panel(10,0,4)
+        ctk.CTkLabel(patrimonio_panel,text="PATRIMONIO",font=ui.fuente(11,"bold"),text_color=T.MUTED).pack(anchor="w",padx=18,pady=(16,5))
+        patrimonio=estado.get("patrimonio",{})
+        ctk.CTkLabel(patrimonio_panel,text=f'Patrimonio neto: {dinero(patrimonio.get("patrimonio_liquido",0))} · por cobrar: {dinero(patrimonio.get("cuentas_por_cobrar",0))} · por pagar: {dinero(patrimonio.get("cuentas_por_pagar",0))}',text_color=T.TXT,wraplength=820,justify="left").pack(anchor="w",padx=18,pady=(0,5))
+        ctk.CTkLabel(patrimonio_panel,text=f'Liquidez operativa: {dinero(patrimonio.get("liquidez_operativa",0))} · reservado: {dinero(patrimonio.get("reservado_metas",0))} · gastos fijos pendientes: {dinero(patrimonio.get("gastos_fijos_pendientes",0))}',text_color=T.MUTED,wraplength=820,justify="left").pack(anchor="w",padx=18,pady=(0,14))
+
+        historial=self._panel(11,0,4)
+        ctk.CTkLabel(historial,text="TRAYECTORIA PATRIMONIAL",font=ui.fuente(11,"bold"),text_color=T.MUTED).pack(anchor="w",padx=18,pady=(16,5))
+        trayectoria=estado.get("trayectoria_patrimonio",{}).get("meses",[])
+        if trayectoria:
+            puntos=trayectoria[-3:]
+            texto=" · ".join(f'{x.get("mes","")} {dinero(x.get("patrimonio_neto",x.get("neto",0)))}' for x in puntos)
+            ctk.CTkLabel(historial,text=texto,text_color=T.TXT,wraplength=820,justify="left").pack(anchor="w",padx=18,pady=(0,4))
+            ctk.CTkLabel(historial,text="Lectura compacta de la evolución patrimonial registrada.",text_color=T.FAINT,wraplength=820,justify="left").pack(anchor="w",padx=18,pady=(0,14))
+        else:
+            ctk.CTkLabel(historial,text="Todavía no hay suficientes movimientos para formar una trayectoria.",text_color=T.MUTED).pack(anchor="w",padx=18,pady=(0,14))
+
     def show_settings(self)->None:
         """Preferencias locales. Aquí no se modifica ningún dato financiero."""
         self._clear("Ajustes","Ajustes")

@@ -485,6 +485,80 @@ class FinanceService:
         advisor.invalidar_contexto(mes)
 
     # ------------------------------------------------------------------
+    # Financial OS: deuda -> emergencia -> ahorro -> inversión -> patrimonio
+    # ------------------------------------------------------------------
+    def financial_os(self, mes: str, presupuesto_deuda: Any = None) -> dict[str, Any]:
+        from ..core import financial_plan
+        presupuesto = None if presupuesto_deuda in (None, "") else parsear_dinero(presupuesto_deuda)
+        return financial_plan.financial_os(mes, presupuesto)
+
+    def resumen_inversiones(self) -> dict[str, Any]:
+        from ..core import financial_plan
+        return financial_plan.resumen_inversiones()
+
+    def crear_inversion(self, datos: dict[str, Any]) -> int:
+        from ..core import financial_plan
+        return financial_plan.crear_inversion(**datos)
+
+    def registrar_movimiento_inversion(self, inversion_id: int, tipo: str, monto: Any, fecha: str | None = None) -> int:
+        from ..core import financial_plan
+        return financial_plan.registrar_movimiento_inversion(int(inversion_id), tipo, parsear_dinero(monto), fecha)
+
+    def desactivar_inversion(self, inversion_id: int) -> None:
+        from ..core import financial_plan
+        financial_plan.desactivar_inversion(int(inversion_id))
+
+    def registrar_deuda(self, datos: dict[str, Any]) -> int:
+        from ..core import financial_plan
+        payload = dict(datos)
+        for key in ("saldo", "tasa_ea_pb", "pago_minimo"):
+            if key in payload:
+                payload[key] = parsear_dinero(payload[key])
+        return financial_plan.registrar_deuda(**payload)
+
+    def radar_financiero(self, mes: str) -> dict[str, Any]:
+        from ..core import financial_plan
+        return financial_plan.radar_financiero(mes)
+
+    def plan_deuda_integral(self, mensual_disponible: Any) -> dict[str, Any]:
+        from ..core import financial_plan
+        return financial_plan.plan_deuda_integral(parsear_dinero(mensual_disponible))
+
+    def resumen_tarjetas_operativo(self, mes: str) -> dict[str, Any]:
+        from ..core import financial_plan
+        return financial_plan.resumen_tarjetas_operativo(mes)
+
+    def plan_mensual_deuda(self, mes: str, disponible: Any) -> dict[str, Any]:
+        from ..core import financial_plan
+        return financial_plan.plan_mensual_deuda(mes, parsear_dinero(disponible))
+
+    def mapa_accion_financiero(self, mes: str, presupuesto: Any = None) -> dict[str, Any]:
+        from ..core import financial_plan
+        value = None if presupuesto in (None, "") else parsear_dinero(presupuesto)
+        return financial_plan.mapa_accion(mes, value)
+
+    def asignacion_margen(self, mes: str, margen: Any = None) -> dict[str, Any]:
+        from ..core import financial_plan
+        value = None if margen in (None, "") else parsear_dinero(margen)
+        return financial_plan.asignacion_margen(mes, value)
+
+    def trayectoria_patrimonio(self, mes: str, meses: int = 12) -> dict[str, Any]:
+        from ..core import financial_plan
+        return financial_plan.trayectoria_patrimonio(mes, int(meses))
+
+    def plan_deuda(self, mensual_disponible: Any) -> dict[str, Any]:
+        from ..core import financial_plan
+        return financial_plan.plan_deuda(parsear_dinero(mensual_disponible))
+
+    def fondo_emergencia(self, mes: str) -> dict[str, Any]:
+        from ..core import financial_plan
+        return financial_plan.fondo_emergencia(mes)
+
+    def proyeccion_inversion(self, aporte_mensual: Any, meses: int, tasa_anual_pb: int) -> dict[str, Any]:
+        from ..core import financial_plan
+        return financial_plan.proyeccion_inversion(parsear_dinero(aporte_mensual), int(meses), int(tasa_anual_pb))
+
+    # ------------------------------------------------------------------
     # Gastos fijos
     # ------------------------------------------------------------------
     def gastos_fijos(self, mes: str | None = None) -> dict[str, Any]:
@@ -542,7 +616,8 @@ class FinanceService:
     # Balance de pareja
     # ------------------------------------------------------------------
     def estado_actual(self, mes: str) -> dict[str, Any]:
-        return {"liquidity": {"by_person": calc.liquidez_por_persona(mes)}}
+        """Devuelve la foto financiera canónica del motor, sin perder el contrato de UI."""
+        return engine.financial_state(mes)
 
     def explicacion(self, persona: str) -> dict[str, Any]:
         return calc.explicar_balance(persona)
