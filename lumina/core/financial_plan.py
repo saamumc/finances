@@ -265,6 +265,7 @@ def financial_os(month: str, presupuesto_deuda: int | None = None) -> dict[str, 
     presupuesto = max(0, int(presupuesto_deuda if presupuesto_deuda is not None else libre))
     estado["plan_deuda"] = plan_deuda(presupuesto)
     estado["preparacion_inversion"] = readiness(month)
+    estado["proyeccion"] = proyeccion_inversion(max(0, int(libre)), 60, 0) if libre > 0 else {"aporte_mensual": 0, "meses": 60, "tasa_anual_pb": 0, "aportado": 0, "valor_proyectado": 0, "ganancia_proyectada": 0, "evolucion": []}
     prioridades = []
     if estado["deudas"]["tarjetas_total"] > 0:
         prioridades.append({"orden": 1, "clave": "deuda", "titulo": "Ordenar deuda cara", "detalle": "Comparar mínimos y estrategias antes de aumentar aportes de inversión."})
