@@ -277,6 +277,7 @@ def financial_os(month: str, presupuesto_deuda: int | None = None) -> dict[str, 
         "deuda_total": estado["deudas"]["total"],
         "emergencia_cobertura": estado["emergencia"]["cobertura_meses"],
         "inversion_actual": estado["inversiones"]["total"],
+        "ahorro_total": int(estado["ahorros"].get("total", 0)),
         "patrimonio_neto": int(estado["patrimonio"].get("patrimonio_neto", 0)),
     }
     return estado
