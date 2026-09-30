@@ -6,6 +6,7 @@ import sqlite3
 from pathlib import Path
 from typing import Any, Iterator
 import datetime as dt
+import re
 import shutil
 import uuid
 from contextlib import contextmanager
@@ -435,13 +436,28 @@ def _tarjeta(conn: sqlite3.Connection, tarjeta_id: int) -> sqlite3.Row:
 
 
 def _insert_idempotente(conn: sqlite3.Connection, sql: str, params: tuple, tx_uuid: str) -> int:
+    """Inserta una operación y devuelve su id si el UUID ya existía.
+
+    El UUID es la clave de idempotencia: repetir exactamente la misma operación
+    no crea un segundo asiento ni convierte un reintento legítimo en error.
+    """
     try:
         cursor = conn.execute(sql, params)
+        return int(cursor.lastrowid)
     except sqlite3.IntegrityError as exc:
-        if "transaction_uuid" in str(exc).lower():
+        if "transaction_uuid" not in str(exc).lower():
+            raise
+        match = re.search(r"INSERT\s+INTO\s+([A-Za-z_][A-Za-z0-9_]*)", sql, re.IGNORECASE)
+        if not match:
             raise DuplicateOperationError(f"Operación duplicada: {tx_uuid}") from None
-        raise
-    return cursor.lastrowid
+        table = match.group(1)
+        row = conn.execute(
+            f"SELECT id FROM {table} WHERE transaction_uuid=?",
+            (tx_uuid,),
+        ).fetchone()
+        if row is None:
+            raise DuplicateOperationError(f"Operación duplicada: {tx_uuid}") from None
+        return int(row["id"] if hasattr(row, "keys") else row[0])
 
 
 def _registrar_reversion_tarjeta(conn: sqlite3.Connection, *, tarjeta_id: int, tipo_original: str,
