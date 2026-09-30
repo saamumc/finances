@@ -135,6 +135,28 @@ def _otras_deudas() -> list[dict[str, Any]]:
         ).fetchall()
     return [dict(r) for r in rows]
 
+def registrar_deuda(*, acreedor: str, tipo: str, titular: str, saldo: int,
+                    tasa_ea_pb: int = 0, pago_minimo: int = 0,
+                    dia_pago: int | None = None, fecha_fin: str | None = None) -> int:
+    if saldo < 0 or tasa_ea_pb < 0 or pago_minimo < 0:
+        raise ValueError("Saldo, tasa y pago mínimo no pueden ser negativos.")
+    if titular not in {"persona1", "persona2", "compartido"}:
+        raise ValueError("Titular no válido.")
+    if not acreedor.strip() or not tipo.strip():
+        raise ValueError("Acreedor y tipo son obligatorios.")
+    if dia_pago is not None and not 1 <= dia_pago <= 31:
+        raise ValueError("Día de pago inválido.")
+    with db.get_conn() as conn:
+        cur = conn.execute(
+            """INSERT INTO deudas
+               (acreedor, tipo, titular, saldo, tasa_ea_pb, pago_minimo, pago_actual,
+                dia_pago, fecha_fin, activa, creado_en, transaction_uuid)
+               VALUES (?,?,?,?,?,?,0,?,?,1,?,?)""",
+            (acreedor.strip(), tipo.strip(), titular, int(saldo), int(tasa_ea_pb),
+             int(pago_minimo), dia_pago, fecha_fin, _now(), db._new_uuid()),
+        )
+        return int(cur.lastrowid)
+
 
 def resumen_deudas() -> dict[str, Any]:
     tarjetas = [x for x in calc.resumen_tarjetas(solo_activas=True) if x["saldo_deuda"] > 0]
