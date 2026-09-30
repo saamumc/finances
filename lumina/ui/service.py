@@ -516,6 +516,32 @@ class FinanceService:
                 payload[key] = parsear_dinero(payload[key])
         return financial_plan.registrar_deuda(**payload)
 
+    def plan_deuda_integral(self, mensual_disponible: Any) -> dict[str, Any]:
+        from ..core import financial_plan
+        return financial_plan.plan_deuda_integral(parsear_dinero(mensual_disponible))
+
+    def resumen_tarjetas_operativo(self, mes: str) -> dict[str, Any]:
+        from ..core import financial_plan
+        return financial_plan.resumen_tarjetas_operativo(mes)
+
+    def plan_mensual_deuda(self, mes: str, disponible: Any) -> dict[str, Any]:
+        from ..core import financial_plan
+        return financial_plan.plan_mensual_deuda(mes, parsear_dinero(disponible))
+
+    def mapa_accion_financiero(self, mes: str, presupuesto: Any = None) -> dict[str, Any]:
+        from ..core import financial_plan
+        value = None if presupuesto in (None, "") else parsear_dinero(presupuesto)
+        return financial_plan.mapa_accion(mes, value)
+
+    def asignacion_margen(self, mes: str, margen: Any = None) -> dict[str, Any]:
+        from ..core import financial_plan
+        value = None if margen in (None, "") else parsear_dinero(margen)
+        return financial_plan.asignacion_margen(mes, value)
+
+    def trayectoria_patrimonio(self, mes: str, meses: int = 12) -> dict[str, Any]:
+        from ..core import financial_plan
+        return financial_plan.trayectoria_patrimonio(mes, int(meses))
+
     def plan_deuda(self, mensual_disponible: Any) -> dict[str, Any]:
         from ..core import financial_plan
         return financial_plan.plan_deuda(parsear_dinero(mensual_disponible))
