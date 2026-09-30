@@ -286,6 +286,8 @@ def financial_os(month: str, presupuesto_deuda: int | None = None) -> dict[str, 
     libre = max(0, int(estado["flujo"].get("ahorro", 0)))
     presupuesto = max(0, int(presupuesto_deuda if presupuesto_deuda is not None else libre))
     estado["plan_deuda"] = plan_deuda(presupuesto)
+    estado["tarjetas_operativo"] = resumen_tarjetas_operativo(month)
+    estado["plan_mensual_deuda"] = plan_mensual_deuda(month, presupuesto)
     estado["preparacion_inversion"] = readiness(month)
     estado["proyeccion"] = proyeccion_inversion(max(0, int(libre)), 60, 0) if libre > 0 else {"aporte_mensual": 0, "meses": 60, "tasa_anual_pb": 0, "aportado": 0, "valor_proyectado": 0, "ganancia_proyectada": 0, "evolucion": []}
     prioridades = []
@@ -299,6 +301,7 @@ def financial_os(month: str, presupuesto_deuda: int | None = None) -> dict[str, 
         prioridades.append({"orden": 3, "clave": "ahorro", "titulo": "Automatizar ahorro", "detalle": "Separar una cantidad sostenible sin dejar la liquidez mensual en cero."})
     prioridades.append({"orden": 4, "clave": "inversion", "titulo": "Construir patrimonio", "detalle": "Cuando la liquidez y las obligaciones estén cubiertas, modelar aportes de inversión."})
     estado["prioridades"] = prioridades
+    estado["mapa_accion"] = mapa_accion(month, presupuesto)
     estado["resumen"] = {
         "dinero_libre": libre,
         "deuda_total": estado["deudas"]["total"],
