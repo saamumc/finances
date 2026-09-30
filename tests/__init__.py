@@ -1,1 +1,0 @@
-"""Pruebas automatizadas del proyecto."""
